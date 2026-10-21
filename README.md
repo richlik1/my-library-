@@ -1,5 +1,7 @@
 # My Library — your private audiobook player
 
+**Live app:** <https://richlik1.github.io/my-library-/> (open in Safari on iPhone, then Share → Add to Home Screen)
+
 Turn your own books into audiobooks, for free. Import a **PDF, EPUB, DOCX or TXT** file from your iPhone or computer, and
 My Library extracts the text and reads it aloud with your device's built-in voices.
 
@@ -107,7 +109,7 @@ GitHub Pages is free for **public** repositories (private repositories need a pa
 1. On GitHub open the repository → **Settings → Pages** → under *Build and deployment* set **Source: GitHub Actions**.
 2. Merge this code into the `main` branch (or open **Actions → Deploy My Library to GitHub Pages → Run workflow**).
 3. When the workflow finishes, the app is live at `https://<your-username>.github.io/<repository-name>/`
-   (for this repo: `https://richlik1.github.io/MalikLyons/`). The URL is also shown in the workflow run.
+   (for this repo: <https://richlik1.github.io/my-library-/>). The URL is also shown in the workflow run.
 
 ### Option B — Netlify Drop (no Git needed)
 
