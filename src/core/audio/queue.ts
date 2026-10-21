@@ -11,6 +11,8 @@ export interface Job {
   status: JobStatus;
   /** 0..1 within the chapter. */
   progress: number;
+  /** What's happening now, e.g. downloading the voice model. */
+  label?: string;
   error?: string;
 }
 
@@ -143,7 +145,11 @@ export class AudioQueue {
     this.emit();
     this.controller = new AbortController();
     try {
-      await engine.load();
+      await engine.load((_fraction, label) => {
+        Object.assign(job, { progress: 0, label });
+        this.emit();
+      });
+      job.label = undefined;
       const result = await generateChapterAudio(engine, text, {
         voice,
         signal: this.controller.signal,

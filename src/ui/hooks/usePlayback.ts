@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { AudioNarrator } from '../../core/audio/audioNarrator';
+import type { PlaybackController } from '../../core/speech/controller';
 import { Narrator, bookPercent, type NarratorState } from '../../core/speech/narrator';
-import { saveProgress, updateBook } from '../../core/storage/db';
+import { getAudioMeta, getAudioWav, saveProgress, updateBook } from '../../core/storage/db';
+import { audioQueue } from '../narration';
 import type { Book, Chapter, Position } from '../../core/types';
 import { isSequenceEngine } from '../../core/speech/engine';
 import { speechEngine } from '../engine';
@@ -13,9 +16,9 @@ type WakeLockSentinelLike = { release(): Promise<void>; released?: boolean };
  * Connects a Narrator to React: progress saving, settings, wake lock,
  * Media Session metadata and foreground/background handling.
  */
-export function usePlayback(book: Book, chapters: Chapter[], start: Position, voiceId: string | null) {
+export function usePlayback(book: Book, chapters: Chapter[], start: Position, voiceId: string | null, mode: 'device' | 'kokoro' = 'device') {
   const { settings } = useSettings();
-  const [narrator, setNarrator] = useState<Narrator | null>(null);
+  const [narrator, setNarrator] = useState<PlaybackController | null>(null);
   const [state, setState] = useState<NarratorState | null>(null);
   const lastSaved = useRef<string>('');
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -39,13 +42,39 @@ export function usePlayback(book: Book, chapters: Chapter[], start: Position, vo
     [book.id, chapters],
   );
 
+  // Where we are, so switching between device speech and audio files keeps the place.
+  const lastPosition = useRef<Position>(start);
+
   useEffect(() => {
-    const { start: pos, ...opts } = initial.current;
-    const n = new Narrator(speechEngine, chapters, { ...opts, key: book.id }, pos);
+    const { start: _ignored, ...opts } = initial.current;
+    const pos = lastPosition.current;
+    const n: PlaybackController =
+      mode === 'kokoro'
+        ? new AudioNarrator(
+            {
+              bookId: book.id,
+              chapters,
+              getMeta: getAudioMeta,
+              getWav: getAudioWav,
+              requestAudio: (chs) => {
+                audioQueue.enqueue(book.id, chs);
+                audioQueue.prioritize(book.id, chs[0]);
+              },
+            },
+            { rate: settings.rate },
+            pos,
+          )
+        : new Narrator(speechEngine, chapters, { ...opts, key: book.id }, pos);
+    // Tell the audio player as soon as a chapter it is waiting for has been generated.
+    const unsubQueue =
+      n instanceof AudioNarrator
+        ? audioQueue.subscribe((jobs) => jobs.forEach((j) => j.bookId === book.id && j.status === 'done' && n.audioReady(j.chapter)))
+        : () => undefined;
     setNarrator(n);
     updateBook(book.id, { lastOpenedAt: Date.now() }).catch(() => undefined);
     const unsub = n.subscribe((s) => {
       setState(s);
+      lastPosition.current = { chapter: s.chapter, offset: s.offset };
       // Save at most every 1.5 s while playing, immediately on pause/stop.
       if (s.status !== 'playing') {
         if (saveTimer.current) clearTimeout(saveTimer.current);
@@ -68,13 +97,14 @@ export function usePlayback(book: Book, chapters: Chapter[], start: Position, vo
     return () => {
       flush();
       unsub();
+      unsubQueue();
       document.removeEventListener('visibilitychange', onVisibility);
       window.removeEventListener('pagehide', flush);
       if (saveTimer.current) clearTimeout(saveTimer.current);
       saveTimer.current = null;
       n.destroy();
     };
-  }, [book.id, chapters, persist]);
+  }, [book.id, chapters, persist, mode]);
 
   // Voice / speed / pitch changes apply immediately.
   useEffect(() => {
@@ -85,7 +115,8 @@ export function usePlayback(book: Book, chapters: Chapter[], start: Position, vo
   const playing = state?.status === 'playing';
   useEffect(() => {
     // The iOS app keeps narrating with the screen locked, so it doesn't need this.
-    if (!playing || !settings.keepAwake || isNativeApp() || !('wakeLock' in navigator)) return;
+    // Audio files keep playing with the screen locked, so they don't need it either.
+    if (!playing || !settings.keepAwake || isNativeApp() || mode === 'kokoro' || !('wakeLock' in navigator)) return;
     let lock: WakeLockSentinelLike | null = null;
     let cancelled = false;
     const acquire = async () => {
@@ -105,7 +136,7 @@ export function usePlayback(book: Book, chapters: Chapter[], start: Position, vo
       document.removeEventListener('visibilitychange', onVis);
       lock?.release().catch(() => undefined);
     };
-  }, [playing, settings.keepAwake]);
+  }, [playing, settings.keepAwake, mode]);
 
   // Media Session: headphone / keyboard media keys where the browser supports it.
   useEffect(() => {
@@ -129,8 +160,8 @@ export function usePlayback(book: Book, chapters: Chapter[], start: Position, vo
         ['pause', () => narrator.pause()],
         ['previoustrack', () => narrator.prevChapter()],
         ['nexttrack', () => narrator.nextChapter()],
-        ['seekbackward', () => narrator.skip(-1)],
-        ['seekforward', () => narrator.skip(1)],
+        ['seekbackward', () => (narrator.skipSeconds ? narrator.skipSeconds(-15) : narrator.skip(-1))],
+        ['seekforward', () => (narrator.skipSeconds ? narrator.skipSeconds(30) : narrator.skip(1))],
       ];
       for (const [a, h] of handlers) {
         try {
@@ -140,10 +171,18 @@ export function usePlayback(book: Book, chapters: Chapter[], start: Position, vo
         }
       }
       ms.playbackState = playing ? 'playing' : 'paused';
+      // Lock Screen scrubber for audio files.
+      if (narrator.kind === 'audio' && state?.duration) {
+        try {
+          ms.setPositionState({ duration: state.duration, position: Math.min(state.time ?? 0, state.duration), playbackRate: settings.rate });
+        } catch {
+          /* not supported */
+        }
+      }
     } catch {
       /* Media Session not usable */
     }
-  }, [book, chapters, narrator, playing, state?.chapter]);
+  }, [book, chapters, narrator, playing, state?.chapter, state?.duration, Math.floor((state?.time ?? 0) / 5), settings.rate]);
 
   return { narrator, state };
 }

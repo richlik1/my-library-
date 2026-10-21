@@ -35,6 +35,8 @@ export interface Book {
   /** Present when some pages look like scanned images (PDF only). */
   ocr?: OcrReport;
   favorite?: boolean;
+  /** How this book is narrated: live device speech, or generated natural-voice audio. */
+  narration?: { engine: 'device' | 'kokoro'; voice?: string };
 }
 
 export interface BookContent {
@@ -99,9 +101,22 @@ export interface Settings {
   /** Show novelty voices (Bells, Bubbles, Zarvox…) in the voice list. */
   showNoveltyVoices: boolean;
   categories: string[];
+  /** Bumped when new default categories are added, so existing lists get them once. */
+  categoriesVersion?: number;
 }
 
-export const DEFAULT_CATEGORIES = ['Fiction', 'Non-fiction', 'Business', 'Self-help', 'Study', 'Faith', 'Other'];
+export const DEFAULT_CATEGORIES = [
+  'Business and Entrepreneurship',
+  'Money and Investing',
+  'Leadership',
+  'Discipline and Personal Development',
+  'Communication',
+  'Fatherhood and Relationships',
+  'Spirituality and Philosophy',
+  'Technology and AI',
+  'Fiction',
+  'Other',
+];
 
 export const DEFAULT_SETTINGS: Settings = {
   voiceURI: null,

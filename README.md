@@ -19,6 +19,24 @@ Built with React + TypeScript, PDF.js, the browser SpeechSynthesis API, IndexedD
 
 ---
 
+## Natural voice (listen with the screen locked)
+
+In a book, open **Voice & speed → Natural voice**. The app uses **Kokoro** (an open, free neural voice) to generate real audio
+for each chapter **on your device**; nothing is uploaded and there is no fee. The first time, it downloads the 92 MB voice model
+from Hugging Face (and a 21 MB runtime from this site), then works offline.
+
+- Generated chapters play as audio files, so they **keep playing with the iPhone locked**, with Lock Screen and headphone controls,
+  15 s back / 30 s forward, and speed changes that keep the pitch.
+- Generation runs in order, ahead of where you're listening, skips chapters already made, retries failed sentences, and can be
+  paused or cancelled. **It can take longer than listening** (about 3× in our browser test), so start early and keep the app open.
+- 21 English voices (female and male, American and British), with previews. Changing the voice regenerates.
+- Optional **WebGPU** switch for much faster generation where the browser supports it (larger one-time download).
+- Device voices remain available as the instant option.
+
+See `docs/PLAN.md` (architecture, benchmarks, phases) and `docs/TESTING.md` (what is tested and the iPhone checklist).
+
+---
+
 ## LYONS AI — Knowledge & Growth Library
 
 A second section of the app (tab **Growth Library**) for personal and business development:

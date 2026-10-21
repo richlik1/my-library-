@@ -1,4 +1,4 @@
-import { useMemo, useState, type CSSProperties } from 'react';
+import { useMemo, useState, type CSSProperties, type ReactNode } from 'react';
 import type { VoiceInfo } from '../../core/speech/engine';
 import type { SleepTimer } from '../../core/speech/narrator';
 import type { Annotation, AnnotationKind, Book, Chapter, HighlightColor } from '../../core/types';
@@ -26,7 +26,11 @@ export function ChaptersSheet({
       <ul className="list">
         {chapters.map((c, i) => (
           <li key={i}>
-            <button className={`list-row ${i === current ? 'current' : ''}`} onClick={() => onPick(i)} ref={i === current ? (el) => el?.scrollIntoView({ block: 'center' }) : undefined}>
+            <button
+              className={`list-row ${i === current ? 'current' : ''}`}
+              onClick={() => onPick(i)}
+              ref={i === current ? (el) => el?.scrollIntoView({ block: 'center' }) : undefined}
+            >
               <span className="num">{i + 1}</span>
               <span className="grow">
                 <div>{c.title}</div>
@@ -158,12 +162,7 @@ export function NoteSheet({
       </label>
       <div className="preset-row" style={{ marginBottom: 16 }}>
         {COLORS.map((c) => (
-          <button
-            key={c}
-            className={`chip ${c === color ? 'active' : ''}`}
-            onClick={() => setColor(c)}
-            aria-label={`${c} highlight`}
-          >
+          <button key={c} className={`chip ${c === color ? 'active' : ''}`} onClick={() => setColor(c)} aria-label={`${c} highlight`}>
             <span className="swatch" style={{ background: SWATCH[c], width: 14, height: 14 }} /> {c}
           </button>
         ))}
@@ -181,12 +180,17 @@ export function VoiceSheet({
   onSelect,
   onPreview,
   onClose,
+  top,
+  showDeviceVoices = true,
 }: {
   voices: VoiceInfo[];
   selected: string | null;
   onSelect(id: string): void;
   onPreview(v: VoiceInfo): void;
   onClose(): void;
+  /** Natural-voice controls shown above the speed slider. */
+  top?: ReactNode;
+  showDeviceVoices?: boolean;
 }) {
   const { settings, update } = useSettings();
   const [q, setQ] = useState('');
@@ -211,6 +215,7 @@ export function VoiceSheet({
   const rate = settings.rate;
   return (
     <Sheet title="Voice & speed" onClose={onClose}>
+      {top}
       <div className="rate-row">
         <div className="rate-head">
           <span>Narration speed</span>
@@ -234,78 +239,82 @@ export function VoiceSheet({
           ))}
         </div>
       </div>
-      <div className="rate-row">
-        <div className="rate-head">
-          <span>Pitch</span>
-          <span>{settings.pitch.toFixed(2)}</span>
-        </div>
-        <input
-          type="range"
-          min={0.5}
-          max={1.5}
-          step={0.05}
-          value={settings.pitch}
-          style={{ '--fill': `${(settings.pitch - 0.5) * 100}%` } as CSSProperties}
-          onChange={(e) => update({ pitch: Number(e.target.value) })}
-          aria-label="Pitch"
-        />
-      </div>
-
-      <div className="search" style={{ margin: '4px 0 4px' }}>
-        <Icon name="search" size={20} />
-        <input type="search" placeholder="Search voices" value={q} onChange={(e) => setQ(e.target.value)} />
-      </div>
-      <label className="switch" style={{ borderBottom: 0, paddingBottom: 0 }}>
-        <span>Show all languages</span>
-        <input type="checkbox" checked={allLanguages} onChange={(e) => setAllLanguages(e.target.checked)} />
-      </label>
-
-      {voices.length === 0 && (
-        <div className="banner warn">
-          <span className="icon-wrap">
-            <Icon name="info" />
-          </span>
-          <div className="banner-body">
-            No voices were reported by this browser yet. They usually appear after a moment. On iPhone you can download better free voices
-            in <strong>Settings → Accessibility → Spoken Content → Voices</strong> (choose an “Enhanced” or “Premium” voice), then reopen
-            this app.
+      {showDeviceVoices && (
+        <>
+          <div className="rate-row">
+            <div className="rate-head">
+              <span>Pitch</span>
+              <span>{settings.pitch.toFixed(2)}</span>
+            </div>
+            <input
+              type="range"
+              min={0.5}
+              max={1.5}
+              step={0.05}
+              value={settings.pitch}
+              style={{ '--fill': `${(settings.pitch - 0.5) * 100}%` } as CSSProperties}
+              onChange={(e) => update({ pitch: Number(e.target.value) })}
+              aria-label="Pitch"
+            />
           </div>
-        </div>
-      )}
 
-      {groups.map(([lang, list]) => (
-        <div key={lang} className="voice-group">
-          <h4>{lang}</h4>
-          <ul className="list">
-            {list.map((v) => (
-              <li key={v.id}>
-                <div className={`list-row ${v.id === selected ? 'current' : ''}`}>
-                  <button className="grow" style={{ textAlign: 'left' }} onClick={() => onSelect(v.id)}>
-                    <div>
-                      {v.name.replace(/\s*\((Enhanced|Premium)\)/i, '')}
-                      {v.quality === 'premium' && <span className="tag">Premium</span>}
-                      {v.quality === 'enhanced' && <span className="tag">Enhanced</span>}
-                      {!v.local && <span className="tag dim">Online</span>}
+          <div className="search" style={{ margin: '4px 0 4px' }}>
+            <Icon name="search" size={20} />
+            <input type="search" placeholder="Search voices" value={q} onChange={(e) => setQ(e.target.value)} />
+          </div>
+          <label className="switch" style={{ borderBottom: 0, paddingBottom: 0 }}>
+            <span>Show all languages</span>
+            <input type="checkbox" checked={allLanguages} onChange={(e) => setAllLanguages(e.target.checked)} />
+          </label>
+
+          {voices.length === 0 && (
+            <div className="banner warn">
+              <span className="icon-wrap">
+                <Icon name="info" />
+              </span>
+              <div className="banner-body">
+                No voices were reported by this browser yet. They usually appear after a moment. On iPhone you can download better free
+                voices in <strong>Settings → Accessibility → Spoken Content → Voices</strong> (choose an “Enhanced” or “Premium” voice),
+                then reopen this app.
+              </div>
+            </div>
+          )}
+
+          {groups.map(([lang, list]) => (
+            <div key={lang} className="voice-group">
+              <h4>{lang}</h4>
+              <ul className="list">
+                {list.map((v) => (
+                  <li key={v.id}>
+                    <div className={`list-row ${v.id === selected ? 'current' : ''}`}>
+                      <button className="grow" style={{ textAlign: 'left' }} onClick={() => onSelect(v.id)}>
+                        <div>
+                          {v.name.replace(/\s*\((Enhanced|Premium)\)/i, '')}
+                          {v.quality === 'premium' && <span className="tag">Premium</span>}
+                          {v.quality === 'enhanced' && <span className="tag">Enhanced</span>}
+                          {!v.local && <span className="tag dim">Online</span>}
+                        </div>
+                        <div className="sub">
+                          {v.lang}
+                          {v.isDefault ? ' · system default' : ''}
+                        </div>
+                      </button>
+                      <button className="icon-btn" onClick={() => onPreview(v)} aria-label={`Preview ${v.name}`}>
+                        <Icon name="play" size={18} />
+                      </button>
+                      {v.id === selected && <Icon name="check" size={20} />}
                     </div>
-                    <div className="sub">
-                      {v.lang}
-                      {v.isDefault ? ' · system default' : ''}
-                    </div>
-                  </button>
-                  <button className="icon-btn" onClick={() => onPreview(v)} aria-label={`Preview ${v.name}`}>
-                    <Icon name="play" size={18} />
-                  </button>
-                  {v.id === selected && <Icon name="check" size={20} />}
-                </div>
-              </li>
-            ))}
-          </ul>
-        </div>
-      ))}
-      <p className="muted small" style={{ marginTop: 16 }}>
-        Voices come free with your device. “Online” voices need an internet connection — choose an on-device voice to listen offline. On
-        iPhone, add Enhanced/Premium voices in Settings → Accessibility → Spoken Content → Voices.
-      </p>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+          <p className="muted small" style={{ marginTop: 16 }}>
+            Voices come free with your device. “Online” voices need an internet connection — choose an on-device voice to listen offline. On
+            iPhone, add Enhanced/Premium voices in Settings → Accessibility → Spoken Content → Voices.
+          </p>
+        </>
+      )}
     </Sheet>
   );
 }
@@ -351,7 +360,12 @@ function langName(tag: string): string {
 }
 
 export function safeName(s: string) {
-  return s.replace(/[\\/:*?"<>|]+/g, ' ').trim().slice(0, 80) || 'book';
+  return (
+    s
+      .replace(/[\\/:*?"<>|]+/g, ' ')
+      .trim()
+      .slice(0, 80) || 'book'
+  );
 }
 
 /**

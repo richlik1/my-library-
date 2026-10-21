@@ -29,8 +29,11 @@ on this 4-core CPU:
 | am_michael (male) | 10.8 s | 4.9 s | 2.2× real time | |
 
 Model load: 1.6 s. Model size: 92 MB (q8) + ~0.5 MB per voice. Sample rate 24 kHz.
-**Not yet measured on an iPhone.** Memory near 0.5 GB is a real risk for a Safari tab; WebGPU (Safari 26) should be faster
-than WASM but is unverified.
+
+In the browser (Chromium, WebAssembly, 1 thread, same machine) the app's real Kokoro path ran at roughly **0.3× real time**:
+generating a chapter takes about three times as long as listening to it. **Not yet measured on an iPhone.** Memory near
+0.5 GB is a real risk for a Safari tab. WebGPU (available in Safari 26) should be much faster but is unverified; it is offered
+as an option. Multi-threaded WebAssembly would need cross-origin isolation headers, which GitHub Pages can't send.
 
 ---
 
@@ -64,10 +67,13 @@ AI (later)       →  retrieval over stored text  →  local model if available,
 - [x] Import PDF, EPUB, DOCX, TXT, Markdown, RTF, HTML; scanned-PDF detection (existing)
 - [x] Bookshelf, categories, search, progress (existing)
 - [x] Free narration fallback with device voices (existing)
-- [ ] **Audio-file narration**: neural engine interface, Kokoro in the browser, chapter generation queue (retries, dedupe,
-      progress), audio cache, audio player with Lock Screen controls, 15 s back / 30 s forward, speed, position save/resume
-- [ ] Brief's categories added to the shelf defaults
-- [ ] Owner tests on iPhone: lock screen, app switching, calls, Bluetooth (checklist in `docs/TESTING.md`)
+- [x] **Audio-file narration**: neural engine interface, Kokoro in the browser (WebAssembly; WebGPU option), chapter
+      generation queue (retries, dedupe, pause/resume/cancel, progress), audio cache, audio-file player with Lock Screen /
+      Media Session controls, 15 s back / 30 s forward, speed with pitch kept, position save/resume, auto-advance and
+      generate-ahead
+- [x] Brief's categories added to the shelf defaults (merged into existing lists once); Unread filter; sort by last opened,
+      title, progress
+- [ ] Owner tests on iPhone: lock screen, app switching, calls, Bluetooth (checklist in `docs/TESTING.md`) — **not run**
 
 ### Phase 2 — Natural narration
 Piper engine; voice per book; pronunciation dictionary; pause/paragraph spacing; whole-book generation; storage

@@ -13,6 +13,7 @@ import { usePlayback } from '../hooks/usePlayback';
 import { goBack, navigate } from '../hooks/useRoute';
 import { pickDefaultVoice, useVoices } from '../hooks/useVoices';
 import { BookDetailsSheet } from './BookDetailsSheet';
+import { NarrationPanel, useAudioJobs } from './NarrationPanel';
 import { Icon } from './Icon';
 import { AnnotationsSheet, COLORS, ChaptersSheet, NoteSheet, SleepSheet, VoiceSheet, swatch } from './PlayerSheets';
 import { Reader, type TextRange } from './Reader';
@@ -92,7 +93,9 @@ function PlayerView({ data, autoplay }: { data: Loaded; autoplay: boolean }) {
     if (settings.voiceURI && voices.some((v) => v.id === settings.voiceURI)) return settings.voiceURI;
     return pickDefaultVoice(voices)?.id ?? null;
   }, [settings.voiceURI, voices]);
-  const { narrator, state } = usePlayback(book, chapters, data.start, voiceId);
+  const mode = book.narration?.engine ?? 'device';
+  const { narrator, state } = usePlayback(book, chapters, data.start, voiceId, mode);
+  const jobs = useAudioJobs(book.id);
   const [annotations, setAnnotations] = useState<Annotation[]>(data.annotations);
   const [popover, setPopover] = useState<Popover>(null);
   const [sheet, setSheet] = useState<SheetName>(null);
@@ -100,7 +103,7 @@ function PlayerView({ data, autoplay }: { data: Loaded; autoplay: boolean }) {
   const [dismissedNotice, setDismissedNotice] = useState<string | null>(null);
   const [lockTip, setLockTip] = useState(() => {
     try {
-      return isIOS() && !isNativeApp() && localStorage.getItem('ml-lock-tip') !== '1';
+      return isIOS() && !isNativeApp() && localStorage.getItem('ml-lock-tip-2') !== '1';
     } catch {
       return isIOS() && !isNativeApp();
     }
@@ -134,6 +137,8 @@ function PlayerView({ data, autoplay }: { data: Loaded; autoplay: boolean }) {
   if (!narrator || !state) return null;
 
   const chapter = chapters[state.chapter];
+  const audioMode = narrator.kind === 'audio';
+  const chapterJob = jobs.find((j) => j.chapter === state.chapter);
   const chunks = state.chunks;
   const playing = state.status === 'playing';
   const cps = 15 * settings.rate; // rough characters per second
@@ -288,11 +293,12 @@ function PlayerView({ data, autoplay }: { data: Loaded; autoplay: boolean }) {
             </button>
           </div>
         )}
-        {!notice && lockTip && (
+        {!notice && lockTip && mode === 'device' && (
           <div className="notice">
             <Icon name="info" size={20} />
             <span>
-              iPhone stops browser speech when the screen locks or you leave the app. Keep My Library open — your place is always saved.
+              Device voices stop when the iPhone locks. To listen with the screen locked, choose <strong>Natural voice</strong> in Voice &amp;
+              speed.
             </span>
             <button
               className="icon-btn"
@@ -300,7 +306,7 @@ function PlayerView({ data, autoplay }: { data: Loaded; autoplay: boolean }) {
               aria-label="Got it"
               onClick={() => {
                 try {
-                  localStorage.setItem('ml-lock-tip', '1');
+                  localStorage.setItem('ml-lock-tip-2', '1');
                 } catch {
                   /* ignore */
                 }
@@ -312,35 +318,76 @@ function PlayerView({ data, autoplay }: { data: Loaded; autoplay: boolean }) {
           </div>
         )}
         <div className="dock-inner">
+          {audioMode && state.waitingForAudio && (
+            <div className="small" style={{ textAlign: 'center', color: 'var(--text-2)', margin: '2px 0 6px' }} role="status">
+              {chapterJob?.status === 'failed'
+                ? `Couldn’t generate this chapter. ${chapterJob.error ?? ''}`
+                : chapterJob?.label ??
+                  (chapterJob ? `Preparing this chapter’s audio… ${Math.round(chapterJob.progress * 100)}%` : 'This chapter’s audio isn’t generated yet. Press play to start.')}
+            </div>
+          )}
           <div className="scrub">
-            <span>{fmt(elapsed)}</span>
-            <input
-              type="range"
-              min={0}
-              max={Math.max(0, chunks.length - 1)}
-              value={state.chunkIndex}
-              style={{ '--fill': `${chunks.length > 1 ? (state.chunkIndex / (chunks.length - 1)) * 100 : 0}%` } as CSSProperties}
-              onChange={(e) => {
-                const c = chunks[Number(e.target.value)];
-                if (c) narrator.seek({ chapter: state.chapter, offset: c.start });
-              }}
-              aria-label="Position in chapter"
-            />
-            <span>-{fmt(total - elapsed)}</span>
+            {audioMode ? (
+              <>
+                <span>{fmt(state.time ?? 0)}</span>
+                <input
+                  type="range"
+                  min={0}
+                  max={Math.max(1, Math.floor(state.duration ?? 0))}
+                  value={Math.floor(state.time ?? 0)}
+                  disabled={!state.duration}
+                  style={{ '--fill': `${state.duration ? ((state.time ?? 0) / state.duration) * 100 : 0}%` } as CSSProperties}
+                  onChange={(e) => narrator.skipSeconds?.(Number(e.target.value) - (state.time ?? 0))}
+                  aria-label="Position in chapter"
+                />
+                <span>-{fmt(((state.duration ?? 0) - (state.time ?? 0)) / settings.rate)}</span>
+              </>
+            ) : (
+              <>
+                <span>{fmt(elapsed)}</span>
+                <input
+                  type="range"
+                  min={0}
+                  max={Math.max(0, chunks.length - 1)}
+                  value={state.chunkIndex}
+                  style={{ '--fill': `${chunks.length > 1 ? (state.chunkIndex / (chunks.length - 1)) * 100 : 0}%` } as CSSProperties}
+                  onChange={(e) => {
+                    const c = chunks[Number(e.target.value)];
+                    if (c) narrator.seek({ chapter: state.chapter, offset: c.start });
+                  }}
+                  aria-label="Position in chapter"
+                />
+                <span>-{fmt(total - elapsed)}</span>
+              </>
+            )}
           </div>
           <div className="controls">
             <button className="icon-btn" onClick={() => narrator.prevChapter()} aria-label="Previous chapter">
               <Icon name="prevChapter" size={24} />
             </button>
-            <button className="icon-btn" onClick={() => narrator.skip(-1)} aria-label="Back one sentence">
-              <Icon name="back" size={26} />
-            </button>
+            {audioMode ? (
+              <button className="icon-btn skip-label" onClick={() => narrator.skipSeconds?.(-15)} aria-label="Back 15 seconds">
+                <Icon name="back" size={26} />
+                <small>15</small>
+              </button>
+            ) : (
+              <button className="icon-btn" onClick={() => narrator.skip(-1)} aria-label="Back one sentence">
+                <Icon name="back" size={26} />
+              </button>
+            )}
             <button className="play-btn" onClick={() => narrator.toggle()} aria-label={playing ? 'Pause' : 'Play'} data-testid="play">
               <Icon name={playing ? 'pause' : 'play'} size={30} />
             </button>
-            <button className="icon-btn" onClick={() => narrator.skip(1)} aria-label="Forward one sentence">
-              <Icon name="forward" size={26} />
-            </button>
+            {audioMode ? (
+              <button className="icon-btn skip-label" onClick={() => narrator.skipSeconds?.(30)} aria-label="Forward 30 seconds">
+                <Icon name="forward" size={26} />
+                <small>30</small>
+              </button>
+            ) : (
+              <button className="icon-btn" onClick={() => narrator.skip(1)} aria-label="Forward one sentence">
+                <Icon name="forward" size={26} />
+              </button>
+            )}
             <button className="icon-btn" onClick={() => narrator.nextChapter()} aria-label="Next chapter" disabled={state.chapter >= chapters.length - 1}>
               <Icon name="nextChapter" size={24} />
             </button>
@@ -405,6 +452,8 @@ function PlayerView({ data, autoplay }: { data: Loaded; autoplay: boolean }) {
           onSelect={(id) => update({ voiceURI: id })}
           onPreview={preview}
           onClose={() => setSheet(null)}
+          showDeviceVoices={mode === 'device'}
+          top={<NarrationPanel book={book} chapters={chapters} currentChapter={state.chapter} onBookChange={setBook} />}
         />
       )}
       {sheet === 'sleep' && (

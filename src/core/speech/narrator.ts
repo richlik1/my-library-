@@ -1,4 +1,5 @@
 import type { Chapter, Position } from '../types';
+import type { PlaybackController } from './controller';
 import { type Chunk, chunkAt, chunkText, wordStart } from './chunker';
 import { isSequenceEngine, type SequenceItem, type SpeakOptions, type SpeechEngine, type SpeechErrorCode } from './engine';
 
@@ -16,6 +17,11 @@ export interface NarratorState {
   /** A message for the listener when playback stopped unexpectedly. */
   notice: string | null;
   sleep: SleepTimer;
+  /** Audio-file playback only: seconds into the chapter audio and its length. */
+  time?: number;
+  duration?: number;
+  /** Audio-file playback only: the chapter's audio isn't generated yet. */
+  waitingForAudio?: boolean;
 }
 
 type Listener = (s: NarratorState) => void;
@@ -38,7 +44,8 @@ const MAX_SEQUENCE_ITEMS = 4000;
  * engine failures, and reports an exact position for saving.
  * Independent of React and of the speech engine implementation.
  */
-export class Narrator {
+export class Narrator implements PlaybackController {
+  readonly kind = 'speech' as const;
   private listeners = new Set<Listener>();
   private chunkCache = new Map<number, Chunk[]>();
   private state: NarratorState;

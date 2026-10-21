@@ -35,7 +35,7 @@ export default defineConfig({
         // Precache the whole app shell (including the PDF.js worker) so the
         // app opens and can import books with no network at all.
         globPatterns: ['**/*.{js,mjs,css,html,png,svg,ico,webmanifest,pdf}'],
-        globIgnores: ['pdfjs/**'],
+        globIgnores: ['pdfjs/**', 'ort/**'],
         maximumFileSizeToCacheInBytes: 8 * 1024 * 1024,
         navigateFallback: 'index.html',
         cleanupOutdatedCaches: true,
@@ -46,6 +46,12 @@ export default defineConfig({
             urlPattern: ({ url }) => url.pathname.includes('/pdfjs/'),
             handler: 'CacheFirst',
             options: { cacheName: 'pdfjs-assets', expiration: { maxEntries: 400 } },
+          },
+          {
+            // Natural-voice runtime (21 MB): cached the first time Natural voice is used.
+            urlPattern: ({ url }) => url.pathname.includes('/ort/'),
+            handler: 'CacheFirst',
+            options: { cacheName: 'voice-runtime', expiration: { maxEntries: 4 } },
           },
         ],
       },

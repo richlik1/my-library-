@@ -34,6 +34,7 @@ export function Library() {
   const [progress, setProgress] = useState<Map<string, Progress>>(new Map());
   const [query, setQuery] = useState('');
   const [shelf, setShelf] = useState<string>('All');
+  const [sort, setSort] = useState<'recent' | 'title' | 'progress'>('recent');
   const [editing, setEditing] = useState<{ book: Book; isNew: boolean } | null>(null);
   const [hideInstall, setHideInstall] = useState(() => readFlag('ml-hide-install'));
 
@@ -60,6 +61,7 @@ export function Library() {
     const cats = [...new Set((books ?? []).map((b) => b.category))].sort();
     const s = ['All'];
     if ((books ?? []).some((b) => (progress.get(b.id)?.percent ?? 0) > 0 && !progress.get(b.id)?.finished)) s.push('Listening');
+    if ((books ?? []).some((b) => !(progress.get(b.id)?.percent ?? 0) && !progress.get(b.id)?.finished)) s.push('Unread');
     if ((books ?? []).some((b) => b.favorite)) s.push('Favorites');
     if ((books ?? []).some((b) => progress.get(b.id)?.finished)) s.push('Finished');
     return [...s, ...cats];
@@ -67,15 +69,20 @@ export function Library() {
 
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return (books ?? []).filter((b) => {
+    const list = (books ?? []).filter((b) => {
       const p = progress.get(b.id);
       if (shelf === 'Listening' && !((p?.percent ?? 0) > 0 && !p?.finished)) return false;
+      if (shelf === 'Unread' && ((p?.percent ?? 0) > 0 || p?.finished)) return false;
       if (shelf === 'Favorites' && !b.favorite) return false;
       if (shelf === 'Finished' && !p?.finished) return false;
-      if (!['All', 'Listening', 'Favorites', 'Finished'].includes(shelf) && b.category !== shelf) return false;
+      if (!['All', 'Listening', 'Unread', 'Favorites', 'Finished'].includes(shelf) && b.category !== shelf) return false;
       return !q || b.title.toLowerCase().includes(q) || b.author.toLowerCase().includes(q) || b.category.toLowerCase().includes(q);
     });
-  }, [books, progress, query, shelf]);
+    const pct = (b: Book) => (progress.get(b.id)?.finished ? 1 : (progress.get(b.id)?.percent ?? 0));
+    if (sort === 'title') return [...list].sort((a, b) => a.title.localeCompare(b.title));
+    if (sort === 'progress') return [...list].sort((a, b) => pct(b) - pct(a));
+    return list; // already newest first by last opened / added
+  }, [books, progress, query, shelf, sort]);
 
   const current = useMemo(
     () => (books ?? []).find((b) => b.lastOpenedAt && !progress.get(b.id)?.finished),
@@ -206,6 +213,16 @@ export function Library() {
           <div className="search" style={{ marginTop: 20 }}>
             <Icon name="search" size={20} />
             <input type="search" placeholder="Search title, author or category" value={query} onChange={(e) => setQuery(e.target.value)} aria-label="Search books" />
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 6 }}>
+ <div className="small muted" style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <span aria-hidden="true">Sort</span>
+              <select id="library-sort" aria-label="Sort books" className="input" style={{ width: 'auto', minHeight: 34, padding: '4px 10px', fontSize: 14 }} value={sort} onChange={(e) => setSort(e.target.value as typeof sort)}>
+                <option value="recent">Last opened</option>
+                <option value="title">Title</option>
+                <option value="progress">Progress</option>
+              </select>
+            </div>
           </div>
           <div className="chips" role="tablist">
             {shelves.map((s) => (

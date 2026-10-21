@@ -90,6 +90,16 @@ describe('library storage', () => {
     expect(await listBooks()).toHaveLength(1);
   });
 
+  it('adds the new default categories to an existing list once, keeping custom ones', async () => {
+    await (await db()).put('kv', { ...(await getSettings()), categories: ['Fiction', 'My Custom'], categoriesVersion: 1 }, 'settings');
+    const s = await getSettings();
+    expect(s.categories.slice(0, 2)).toEqual(['Fiction', 'My Custom']);
+    expect(s.categories).toContain('Spirituality and Philosophy');
+    expect(s.categories).toContain('Technology and AI');
+    await saveSettings({ ...s, categories: ['Only Mine'] });
+    expect((await getSettings()).categories).toEqual(['Only Mine']); // a later removal is respected
+  });
+
   it('rejects files that are not backups', () => {
     expect(() => parseBackup('{"hello":1}')).toThrow(/not a My Library backup/);
     expect(() => parseBackup('nope')).toThrow(/not valid JSON/);

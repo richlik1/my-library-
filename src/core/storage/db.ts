@@ -184,9 +184,17 @@ export async function deleteAnnotation(id: string) {
 
 // ---- Settings --------------------------------------------------------------
 
+const CATEGORIES_VERSION = 2;
+
 export async function getSettings(): Promise<Settings> {
   const s = (await (await db()).get('kv', 'settings')) as Partial<Settings> | undefined;
-  return { ...DEFAULT_SETTINGS, ...(s ?? {}) };
+  const merged: Settings = { ...DEFAULT_SETTINGS, ...(s ?? {}) };
+  // Add new default categories to an existing list once, keeping the user's own.
+  if (s?.categories && (s.categoriesVersion ?? 1) < CATEGORIES_VERSION) {
+    merged.categories = [...new Set([...s.categories, ...DEFAULT_SETTINGS.categories])];
+  }
+  merged.categoriesVersion = CATEGORIES_VERSION;
+  return merged;
 }
 
 export async function saveSettings(s: Settings) {

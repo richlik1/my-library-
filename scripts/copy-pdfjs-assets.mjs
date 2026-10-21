@@ -19,3 +19,15 @@ for (const dir of ['cmaps', 'standard_fonts']) {
   if (existsSync(src)) cpSync(src, join(out, dir), { recursive: true });
 }
 console.log('[copy-pdfjs-assets] copied PDF.js cmaps and fonts to public/pdfjs');
+
+// ONNX Runtime WebAssembly files for the Kokoro natural voice, so the app
+// never fetches code from a CDN (works offline once cached).
+try {
+  const tdist = dirname(require.resolve('@huggingface/transformers'));
+  const ort = join(process.cwd(), 'public', 'ort');
+  mkdirSync(ort, { recursive: true });
+  for (const f of ['ort-wasm-simd-threaded.jsep.mjs', 'ort-wasm-simd-threaded.jsep.wasm']) cpSync(join(tdist, f), join(ort, f));
+  console.log('[copy-pdfjs-assets] copied ONNX Runtime WebAssembly files to public/ort');
+} catch {
+  console.log('[copy-pdfjs-assets] @huggingface/transformers not installed yet, skipping ONNX Runtime files');
+}
