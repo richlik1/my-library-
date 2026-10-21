@@ -186,3 +186,31 @@ test('PDF import still works when the browser blocks the PDF worker file', async
   await expect(page.getByRole('dialog', { name: 'Book added' })).toBeVisible({ timeout: 30_000 });
   await expect(page.getByLabel('Title')).toHaveValue('The Lighthouse Keeper');
 });
+
+test('imports web pages and RTF, and the import check passes', async ({ page }) => {
+  await page.goto('./');
+  await page.getByTestId('file-input').setInputFiles({
+    name: 'article.html',
+    mimeType: 'text/html',
+    buffer: Buffer.from('<html><head><title>Web Article</title></head><body><p>Read me aloud, please.</p></body></html>'),
+  });
+  await expect(page.getByLabel('Title')).toHaveValue('Web Article');
+  await page.getByRole('button', { name: 'Save to library' }).click();
+  await page.getByTestId('file-input').setInputFiles({ name: 'memo.rtf', mimeType: 'application/rtf', buffer: Buffer.from(String.raw`{\rtf1\ansi Quarterly memo for the team.\par}`) });
+  await expect(page.getByLabel('Title')).toHaveValue('memo');
+  await page.getByRole('button', { name: 'Save to library' }).click();
+
+  await page.getByRole('button', { name: 'Settings and backup' }).click();
+  await page.getByRole('button', { name: 'Run the check' }).click();
+  await expect(page.getByText('Everything works here.')).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText('Read the text from the PDF')).toBeVisible();
+});
+
+test('a failed import shows copyable details', async ({ page }) => {
+  await page.goto('./');
+  await page.getByTestId('file-input').setInputFiles({ name: 'broken.pdf', mimeType: 'application/pdf', buffer: Buffer.from('%PDF-1.7 this is not really a pdf') });
+  await expect(page.getByRole('dialog', { name: "Couldn't import" })).toBeVisible({ timeout: 40_000 });
+  await page.getByText('Details', { exact: true }).click();
+  await expect(page.locator('pre')).toContainText('Device:');
+  await expect(page.locator('pre')).toContainText('broken.pdf');
+});

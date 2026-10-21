@@ -1,7 +1,9 @@
 // Browser loader for PDF.js. The "legacy" build supports older Safari
 // versions (iOS 15/16) that the modern build does not.
 import * as pdfjs from 'pdfjs-dist/legacy/build/pdf.mjs';
-import workerUrl from 'pdfjs-dist/legacy/build/pdf.worker.min.mjs?url';
+// `?worker&url` bundles the worker through Vite, so it is compiled for older
+// Safari like the rest of the app (the raw file needs iOS 16.4+).
+import workerUrl from 'pdfjs-dist/legacy/build/pdf.worker.min.mjs?worker&url';
 import type { PdfjsLike } from './pdf';
 
 let configured = false;

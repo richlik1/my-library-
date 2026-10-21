@@ -7,12 +7,18 @@ import { useSettings } from '../hooks/settings';
 import { useToast } from '../hooks/toast';
 import { Icon } from './Icon';
 import { Sheet } from './Sheet';
+import { deviceInfo } from '../platform';
 
 interface Failure {
   name: string;
   message: string;
   needsOcr: boolean;
+  /** Technical details to send for support. */
+  details: string;
 }
+
+/** Originals above this size aren't kept (text is still saved) to spare phone memory and storage. */
+const KEEP_ORIGINAL_MAX = 30 * 1024 * 1024;
 
 /** File picker + extraction progress + error explanations for importing books. */
 export function useImporter(onImported: (books: Book[], openDetails: boolean) => void) {
@@ -32,10 +38,24 @@ export function useImporter(onImported: (books: Book[], openDetails: boolean) =>
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
         setBusy({ name: file.name, index: i, total: files.length, fraction: 0, label: 'Opening…' });
+        let stage = 'reading the file';
         try {
-          const imported = await importFile(file, (fraction, label) => setBusy((b) => (b ? { ...b, fraction, label } : b)));
+          const imported = await importFile(file, (fraction, label) => {
+            stage = label;
+            setBusy((b) => (b ? { ...b, fraction, label } : b));
+          });
+          stage = 'saving to your library';
           setBusy((b) => (b ? { ...b, fraction: 1, label: 'Saving to your library…' } : b));
-          added.push(await saveImportedBook(imported, { name: file.name, size: file.size, type: file.type, data: file }, category));
+          const fileInfo = { name: file.name, size: file.size, type: file.type, data: file };
+          let book: Book;
+          try {
+            book = await saveImportedBook(imported, fileInfo, category, file.size <= KEEP_ORIGINAL_MAX);
+          } catch (saveError) {
+            // Some iPhones can't store large files in browser storage. The text is what matters, so save without the original.
+            console.warn('Saving the original file failed; saving the text only', saveError);
+            book = await saveImportedBook(imported, fileInfo, category, false);
+          }
+          added.push(book);
         } catch (e) {
           console.error(e);
           const err = e as Error;
@@ -43,12 +63,13 @@ export function useImporter(onImported: (books: Book[], openDetails: boolean) =>
           failed.push({
             name: file.name,
             needsOcr: e instanceof ImportError && e.kind === 'needs-ocr',
+            details: `File: ${file.name} (${file.type || 'no type'}, ${Math.round(file.size / 1024)} KB)\nStep: ${stage}\nError: ${err?.name ?? 'Error'}: ${err?.message ?? String(e)}\nDevice: ${deviceInfo()}\nApp: ${__APP_VERSION__}`,
             message:
               e instanceof ImportError
                 ? e.message
                 : quota
                   ? 'Your device is out of storage space for this app. Delete some books or free up space, then try again.'
-                  : `Something went wrong while reading this file (${err?.message ?? 'unknown error'}).`,
+                  : `Something went wrong while ${stage.replace(/…$/, '').toLowerCase()}. Try again; if it keeps happening, tap “Copy details” and send them to support.`,
           });
         }
       }
@@ -153,6 +174,26 @@ export function useImporter(onImported: (books: Book[], openDetails: boolean) =>
               <div className="banner-body">
                 <strong style={{ wordBreak: 'break-word' }}>{f.name}</strong>
                 <div style={{ marginTop: 4 }}>{f.message}</div>
+                <details style={{ marginTop: 8 }}>
+                  <summary className="small">Details</summary>
+                  <pre className="small" style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', margin: '6px 0' }}>
+                    {f.details}
+                  </pre>
+                  <button
+                    className="btn"
+                    style={{ minHeight: 34 }}
+                    onClick={async () => {
+                      try {
+                        await navigator.clipboard.writeText(f.details);
+                        toast('Details copied');
+                      } catch {
+                        toast('Select the details text and copy it.');
+                      }
+                    }}
+                  >
+                    Copy details
+                  </button>
+                </details>
               </div>
             </div>
           ))}

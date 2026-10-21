@@ -34,7 +34,7 @@ export default defineConfig({
       workbox: {
         // Precache the whole app shell (including the PDF.js worker) so the
         // app opens and can import books with no network at all.
-        globPatterns: ['**/*.{js,mjs,css,html,png,svg,ico,webmanifest}'],
+        globPatterns: ['**/*.{js,mjs,css,html,png,svg,ico,webmanifest,pdf}'],
         globIgnores: ['pdfjs/**'],
         maximumFileSizeToCacheInBytes: 8 * 1024 * 1024,
         navigateFallback: 'index.html',
@@ -51,6 +51,7 @@ export default defineConfig({
       },
     }),
   ],
+  worker: { format: 'es' },
   build: {
     target: 'es2020',
     chunkSizeWarningLimit: 2500,

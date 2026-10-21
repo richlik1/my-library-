@@ -8,6 +8,7 @@ import { goBack } from '../hooks/useRoute';
 import { formatBytes } from './BookDetailsSheet';
 import { Icon } from './Icon';
 import { downloadBlob } from './PlayerSheets';
+import { ImportCheck } from './ImportCheck';
 import { isNativeApp } from '../platform';
 
 export function SettingsPage() {
@@ -105,6 +106,8 @@ export function SettingsPage() {
           PDF/EPUB/DOCX/TXT files.
         </p>
       </section>
+
+      <ImportCheck />
 
       <section className="card">
         <h3>Storage on this device</h3>

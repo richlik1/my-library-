@@ -131,7 +131,7 @@ export function Library() {
             <Icon name="book" size={54} />
           </div>
           <h2>Your private audiobook shelf</h2>
-          <p>Add a PDF, EPUB, Word (DOCX) or TXT book. It’s read aloud with your device’s free voices — nothing is uploaded, no account needed.</p>
+          <p>Add a PDF, EPUB, Word, RTF, web page or text book. It’s read aloud with your device’s free voices — nothing is uploaded, no account needed.</p>
           <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
             <importer.AddLabel className="btn btn-primary">
               <Icon name="plus" size={18} /> Add your first book
