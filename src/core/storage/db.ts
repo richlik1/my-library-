@@ -3,6 +3,7 @@ import { newId } from '../id';
 import type { Annotation, Book, BookContent, ImportedBook, Progress, Settings, StoredFile } from '../types';
 import { DEFAULT_SETTINGS } from '../types';
 import type { DailyBlock, GrowthBookState, GrowthNote, WeeklyReview } from '../../growth/types';
+import type { ChapterAudio } from '../audio/types';
 
 /**
  * All data lives in this browser's IndexedDB. Nothing is ever uploaded.
@@ -20,6 +21,10 @@ interface LibraryDB extends DBSchema {
   growthNotes: { key: string; value: GrowthNote };
   growthDays: { key: string; value: DailyBlock };
   growthReviews: { key: string; value: WeeklyReview };
+  // Generated narration (schema v3). Metadata and audio bytes are separate so
+  // listing a book's chapters never loads hundreds of MB of audio.
+  audio: { key: string; value: Omit<ChapterAudio, 'wav'>; indexes: { byBook: string } };
+  audioData: { key: string; value: { key: string; wav: ArrayBuffer } };
 }
 
 export const GROWTH_STORES = ['growthBooks', 'growthNotes', 'growthDays', 'growthReviews'] as const;
@@ -29,7 +34,7 @@ let dbPromise: Promise<IDBPDatabase<LibraryDB>> | null = null;
 
 export function db(): Promise<IDBPDatabase<LibraryDB>> {
   if (!dbPromise) {
-    dbPromise = openDB<LibraryDB>(DB_NAME, 2, {
+    dbPromise = openDB<LibraryDB>(DB_NAME, 3, {
       upgrade(d, oldVersion) {
         if (oldVersion < 1) {
           d.createObjectStore('books', { keyPath: 'id' });
@@ -38,6 +43,10 @@ export function db(): Promise<IDBPDatabase<LibraryDB>> {
           d.createObjectStore('progress', { keyPath: 'bookId' });
           d.createObjectStore('annotations', { keyPath: 'id' }).createIndex('byBook', 'bookId');
           d.createObjectStore('kv');
+        }
+        if (oldVersion < 3) {
+          d.createObjectStore('audio', { keyPath: 'key' }).createIndex('byBook', 'bookId');
+          d.createObjectStore('audioData', { keyPath: 'key' });
         }
         if (oldVersion < 2) {
           // Added with the Growth Library; existing books and progress are untouched.
@@ -117,6 +126,7 @@ export async function updateBook(id: string, patch: Partial<Omit<Book, 'id'>>): 
 }
 
 export async function deleteBook(id: string) {
+  await deleteBookAudio(id);
   const d = await db();
   const tx = d.transaction(['books', 'contents', 'files', 'progress', 'annotations'], 'readwrite');
   await Promise.all([
@@ -202,4 +212,45 @@ export async function storageEstimate(): Promise<{ usage: number; quota: number 
   } catch {
     return null;
   }
+}
+
+// ---- Generated audio ---------------------------------------------------------
+
+export async function getAudioMeta(key: string) {
+  return (await db()).get('audio', key);
+}
+
+export async function getAudioWav(key: string): Promise<ArrayBuffer | undefined> {
+  return (await (await db()).get('audioData', key))?.wav;
+}
+
+export async function putAudio(a: ChapterAudio) {
+  const { wav, ...meta } = a;
+  const d = await db();
+  const tx = d.transaction(['audio', 'audioData'], 'readwrite');
+  await tx.objectStore('audio').put(meta);
+  await tx.objectStore('audioData').put({ key: a.key, wav });
+  await tx.done;
+}
+
+export async function listBookAudio(bookId: string) {
+  const all = await (await db()).getAllFromIndex('audio', 'byBook', bookId);
+  return all.sort((a, b) => a.chapter - b.chapter);
+}
+
+export async function deleteChapterAudio(key: string) {
+  const d = await db();
+  const tx = d.transaction(['audio', 'audioData'], 'readwrite');
+  await Promise.all([tx.objectStore('audio').delete(key), tx.objectStore('audioData').delete(key)]);
+  await tx.done;
+}
+
+export async function deleteBookAudio(bookId: string) {
+  for (const a of await listBookAudio(bookId)) await deleteChapterAudio(a.key);
+}
+
+/** Total size of cached audio, in bytes (WAV: 44-byte header + 2 bytes per sample). */
+export async function audioCacheBytes(): Promise<number> {
+  const all = await (await db()).getAll('audio');
+  return all.reduce((s, a) => s + 44 + Math.round(a.duration * a.sampleRate) * 2, 0);
 }

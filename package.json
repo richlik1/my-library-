@@ -2,7 +2,7 @@
   "name": "my-library",
   "private": true,
   "version": "1.0.0",
-  "description": "My Library \u2014 a private, offline, free audiobook player for your own PDF, EPUB, DOCX and TXT books.",
+  "description": "My Library — a private, offline, free audiobook player for your own PDF, EPUB, DOCX and TXT books.",
   "type": "module",
   "scripts": {
     "dev": "vite --host",
@@ -23,6 +23,7 @@
     "@capacitor/share": "^8.0.3",
     "idb": "^8.0.4",
     "jszip": "^3.10.2",
+    "kokoro-js": "^1.2.1",
     "pdfjs-dist": "^6.4.299",
     "react": "^19.3.0",
     "react-dom": "^19.3.0"
