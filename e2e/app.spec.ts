@@ -180,7 +180,7 @@ test('tapping Add opens the file picker, and pasted text becomes a book', async 
 
 test('PDF import still works when the browser blocks the PDF worker file', async ({ page }) => {
   // Simulates restricted viewers (embedded pages, some in-app browsers) that refuse to start the worker.
-  await page.route(/pdf\.worker[^/]*\.mjs/, (route) => route.abort());
+  await page.route(/pdf-worker-[^/]*\.js/, (route) => route.abort());
   await page.goto('./');
   await page.getByTestId('file-input').setInputFiles({ name: 'lighthouse.pdf', mimeType: 'application/pdf', buffer: await samplePdf() });
   await expect(page.getByRole('dialog', { name: 'Book added' })).toBeVisible({ timeout: 30_000 });
@@ -213,4 +213,16 @@ test('a failed import shows copyable details', async ({ page }) => {
   await page.getByText('Details', { exact: true }).click();
   await expect(page.locator('pre')).toContainText('Device:');
   await expect(page.locator('pre')).toContainText('broken.pdf');
+});
+
+test('PDF import works in browsers without async-iterable streams (Safari)', async ({ page }) => {
+  // Safari can't loop over a ReadableStream with `for await`; PDF.js relies on it.
+  await page.addInitScript(() => {
+    delete (ReadableStream.prototype as unknown as Record<symbol, unknown>)[Symbol.asyncIterator];
+    delete (ReadableStream.prototype as unknown as Record<string, unknown>).values;
+  });
+  await page.goto('./');
+  await page.getByTestId('file-input').setInputFiles({ name: 'lighthouse.pdf', mimeType: 'application/pdf', buffer: await samplePdf() });
+  await expect(page.getByRole('dialog', { name: 'Book added' })).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByLabel('Title')).toHaveValue('The Lighthouse Keeper');
 });
