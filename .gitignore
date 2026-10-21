@@ -1,0 +1,8 @@
+node_modules
+dist
+dev-dist
+public/pdfjs
+test-results
+playwright-report
+*.log
+*.tsbuildinfo
