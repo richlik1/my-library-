@@ -48,6 +48,8 @@ describe('library storage', () => {
     expect((await listBooks()).map((b) => b.title)).toEqual(['Stored Book']);
     expect((await getContent(book.id))?.chapters[1].text).toBe('Goodbye world.');
     expect(await (await getFile(book.id))!.data.text()).toBe('hello');
+    // Stored as raw bytes, not a Blob: Safari on iPhone refuses to store Blobs in IndexedDB.
+    expect((await (await db()).get('files', book.id))!.data).toBeInstanceOf(ArrayBuffer);
     await updateBook(book.id, { category: 'Study' });
     expect((await listBooks())[0].category).toBe('Study');
   });

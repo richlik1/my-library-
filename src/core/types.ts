@@ -46,7 +46,11 @@ export interface StoredFile {
   bookId: string;
   name: string;
   type: string;
-  data: Blob;
+  /**
+   * Raw bytes. Stored as an ArrayBuffer because Safari on iPhone often refuses
+   * to store Blob/File objects in IndexedDB. Older records may hold a Blob.
+   */
+  data: ArrayBuffer | Blob;
 }
 
 /** A position in the book: chapter + character offset inside that chapter. */

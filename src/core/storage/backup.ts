@@ -76,7 +76,7 @@ export async function createBackup(includeOriginalFiles: boolean): Promise<Backu
   const files: BackupFile[] = [];
   if (includeOriginalFiles) {
     for (const f of await d.getAll('files')) {
-      files.push({ bookId: f.bookId, name: f.name, type: f.type, base64: bytesToBase64(new Uint8Array(await f.data.arrayBuffer())) });
+      files.push({ bookId: f.bookId, name: f.name, type: f.type, base64: bytesToBase64(new Uint8Array(f.data instanceof Blob ? await f.data.arrayBuffer() : f.data)) });
     }
   }
   return {
@@ -129,7 +129,7 @@ export async function restoreBackup(backup: Backup, opts: { restoreSettings?: bo
       await tx.objectStore('books').put(book);
       await tx.objectStore('contents').put(content);
       const f = files.get(book.id);
-      if (f) await tx.objectStore('files').put({ bookId: f.bookId, name: f.name, type: f.type, data: new Blob([base64ToBytes(f.base64)], { type: f.type }) });
+      if (f) await tx.objectStore('files').put({ bookId: f.bookId, name: f.name, type: f.type, data: base64ToBytes(f.base64).buffer });
       summary.books++;
     }
   }

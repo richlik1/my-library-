@@ -96,11 +96,13 @@ export async function saveImportedBook(
     charCount: imported.chapters.reduce((s, c) => s + c.text.length, 0),
     ...(imported.ocr ? { ocr: imported.ocr } : {}),
   };
+  // Read the bytes before opening the transaction (it would auto-commit while we wait).
+  const bytes = keepOriginal ? await file.data.arrayBuffer() : null;
   const d = await db();
   const tx = d.transaction(['books', 'contents', 'files'], 'readwrite');
   await tx.objectStore('books').put(book);
   await tx.objectStore('contents').put({ bookId: id, chapters: imported.chapters });
-  if (keepOriginal) await tx.objectStore('files').put({ bookId: id, name: file.name, type: file.type, data: file.data });
+  if (bytes) await tx.objectStore('files').put({ bookId: id, name: file.name, type: file.type, data: bytes });
   await tx.done;
   return book;
 }
@@ -132,8 +134,10 @@ export async function getContent(bookId: string) {
   return (await db()).get('contents', bookId);
 }
 
-export async function getFile(bookId: string) {
-  return (await db()).get('files', bookId);
+/** The original file, always returned as a Blob. */
+export async function getFile(bookId: string): Promise<(StoredFile & { data: Blob }) | undefined> {
+  const f = await (await db()).get('files', bookId);
+  return f ? { ...f, data: f.data instanceof Blob ? f.data : new Blob([f.data], { type: f.type }) } : undefined;
 }
 
 // ---- Progress --------------------------------------------------------------
