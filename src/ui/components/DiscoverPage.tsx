@@ -77,6 +77,11 @@ export function DiscoverPage() {
             <strong>Growth Library</strong>
             <span>21 books for business, leadership, money and family: summaries, quizzes and a daily 30-minute plan.</span>
           </a>
+          <a className="discover-card" href="#/club">
+            <Icon name="note" size={26} />
+            <strong>Book Club</strong>
+            <span>Talk through the chapter you’re on: discussion and reflection questions, and a quiz for Growth Library books.</span>
+          </a>
           <a className="discover-card" href="#/mentor">
             <Icon name="user" size={26} />
             <strong>Mentor</strong>

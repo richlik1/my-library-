@@ -13,7 +13,7 @@ import { Icon } from './Icon';
 import { Sheet } from './Sheet';
 
 /** Something Quick Listen can read aloud, with where its words came from. */
-interface Listenable {
+export interface Listenable {
   id: string;
   title: string;
   text: string;
@@ -217,7 +217,7 @@ export function QuickListenSheet({ book, books, onClose }: { book: Book; books: 
 }
 
 /** Reads one text aloud with the device voice, pausing the book that's playing. */
-function useQuickPlayer() {
+export function useQuickPlayer() {
   const { settings } = useSettings();
   const pb = usePlaybackSession();
   const narrator = useRef<Narrator | null>(null);

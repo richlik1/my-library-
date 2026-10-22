@@ -10,6 +10,7 @@ import { MiniPlayer } from './components/MiniPlayer';
 import { Player } from './components/Player';
 import { ProgressPage } from './components/ProgressPage';
 import { QuotesPage } from './components/QuotesPage';
+import { ClubPage } from './components/ClubPage';
 import { SettingsPage } from './components/SettingsPage';
 import { TabBar, tabFor } from './components/TabBar';
 import { UpdatePrompt } from './components/UpdatePrompt';
@@ -60,6 +61,7 @@ export function App() {
             {route.name === 'progress' && <ProgressPage />}
             {route.name === 'settings' && <SettingsPage />}
             {route.name === 'quotes' && <QuotesPage />}
+            {route.name === 'club' && <ClubPage />}
             {route.name === 'book' && <Player key={route.id} id={route.id} autoplay={route.autoplay} at={route.at} />}
             {route.name === 'growth' && <GrowthHome />}
             {route.name === 'growth-book' && <GrowthBook key={route.id} id={route.id} />}

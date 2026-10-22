@@ -2152,3 +2152,93 @@ main.with-tabs .page {
   color: var(--accent);
   fill: var(--accent);
 }
+
+/* ---------- V2 Phase 3: listening actions, Ask My Book ---------- */
+
+.listen-actions {
+  display: flex;
+  gap: 6px;
+  justify-content: center;
+  margin: 0 0 8px;
+}
+.pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-height: 38px;
+  padding: 0 10px;
+  white-space: nowrap;
+  flex: 0 1 auto;
+  border-radius: 999px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+.pill.active {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.pill:active {
+  transform: scale(0.97);
+}
+.ask-h {
+  margin: 18px 0 8px;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+.ask-passage {
+  font-family: var(--serif);
+  line-height: 1.6;
+  padding: 12px 14px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+.ask-passage p {
+  margin: 0 0 8px;
+}
+.ask-passage .ctx {
+  color: var(--text-3);
+  font-size: 15px;
+}
+.ask-passage .focus {
+  color: var(--text);
+  font-size: 17px;
+}
+.hits {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.hit {
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line);
+}
+.hit-ref {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--accent);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.hit-text {
+  font-family: var(--serif);
+  margin: 4px 0 6px;
+  line-height: 1.55;
+}
+.hit-text strong {
+  color: var(--accent-2);
+}
+
+.field.question span {
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+}

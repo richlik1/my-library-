@@ -8,6 +8,7 @@ import { goBack, navigate } from '../hooks/useRoute';
 import { Icon } from './Icon';
 import { downloadBlob } from './PlayerSheets';
 import { Sheet } from './Sheet';
+import { useQuickPlayer } from './QuickListen';
 
 interface Quote {
   a: Annotation;
@@ -38,6 +39,7 @@ export function QuotesPage() {
   const [bookId, setBookId] = useState('all');
   const [editing, setEditing] = useState<Quote | null>(null);
   const [sharing, setSharing] = useState<Quote | null>(null);
+  const player = useQuickPlayer();
 
   const refresh = async () => {
     const [annotations, books] = await Promise.all([listAllAnnotations(), listBooks()]);
@@ -121,8 +123,24 @@ export function QuotesPage() {
                 Today’s review
               </h2>
               <p className="small muted" style={{ margin: '4px 0 10px' }}>
-                Three saved ideas you haven’t looked at for a while.
+                Saved ideas you haven’t looked at for a while.
               </p>
+              <button
+                className="btn"
+                style={{ marginBottom: 8 }}
+                onClick={() =>
+                  player.playingId === 'recap'
+                    ? player.stop()
+                    : player.play({
+                        id: 'recap',
+                        title: 'Today’s review',
+                        label: 'Your saved quotes',
+                        text: review.map((q) => `From ${q.book.title}, ${q.chapterTitle}. ${q.a.quote}${q.a.note ? ` Your note: ${q.a.note}` : ''}`).join('\n\n'),
+                      })
+                }
+              >
+                <Icon name={player.playingId === 'recap' ? 'pause' : 'play'} size={16} /> {player.playingId === 'recap' ? 'Stop' : 'Listen to today’s review'}
+              </button>
               {review.map((q) => (
                 <div key={q.a.id} className="review-item" style={{ padding: '10px 0', borderTop: '1px solid var(--line)' }}>
                   <div style={{ fontFamily: 'var(--serif)' }}>{q.a.quote}</div>

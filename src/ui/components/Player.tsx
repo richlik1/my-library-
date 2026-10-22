@@ -16,6 +16,7 @@ import { DEFAULT_KOKORO_VOICE, KOKORO_VOICES } from '../../core/audio/kokoroEngi
 import { Icon } from './Icon';
 import { AnnotationsSheet, COLORS, ChaptersSheet, NoteSheet, SleepSheet, VoiceSheet, swatch } from './PlayerSheets';
 import { Reader, type TextRange } from './Reader';
+import { AskSheet, type AskMode } from './AskSheet';
 
 export function Player({ id, autoplay, at }: { id: string; autoplay: boolean; at?: { chapter: number; offset: number } }) {
   const pb = usePlaybackSession();
@@ -81,6 +82,7 @@ function PlayerView({ autoplay, at }: { autoplay: boolean; at?: { chapter: numbe
   }, [book.id]);
   const [popover, setPopover] = useState<Popover>(null);
   const [sheet, setSheet] = useState<SheetName>(null);
+  const [ask, setAsk] = useState<AskMode | null>(null);
   const [noteDraft, setNoteDraft] = useState<{ range: TextRange; chapter: number; existing?: Annotation } | null>(null);
   const [dismissedNotice, setDismissedNotice] = useState<string | null>(null);
   const [lockTip, setLockTip] = useState(() => {
@@ -206,6 +208,9 @@ function PlayerView({ autoplay, at }: { autoplay: boolean; at?: { chapter: numbe
           <div className="ct">
             {chapter?.title} · {state.chapter + 1}/{chapters.length}
           </div>
+        </button>
+        <button className="icon-btn" onClick={() => setAsk('ask')} aria-label="Ask My Book">
+          <Icon name="search" />
         </button>
         <button className="icon-btn" onClick={() => setSheet('details')} aria-label="Book details">
           <Icon name="more" />
@@ -338,6 +343,17 @@ function PlayerView({ autoplay, at }: { autoplay: boolean; at?: { chapter: numbe
                   (chapterJob ? `Preparing this chapter’s audio… ${Math.round(chapterJob.progress * 100)}%` : 'This chapter’s audio isn’t generated yet. Press play to start.')}
             </div>
           )}
+          <div className="listen-actions" role="group" aria-label="While listening">
+            <button className={`pill ${lessonHere ? 'active' : ''}`} onClick={saveLesson} aria-label="Save this sentence as a lesson">
+              <Icon name="highlight" size={16} /> Save lesson
+            </button>
+            <button className="pill" onClick={() => setAsk('explain')}>
+              <Icon name="info" size={16} /> Explain this
+            </button>
+            <button className="pill" onClick={() => setAsk('apply')}>
+              <Icon name="check" size={16} /> Apply it
+            </button>
+          </div>
           <div className="scrub">
             {audioMode ? (
               <>
@@ -415,10 +431,6 @@ function PlayerView({ autoplay, at }: { autoplay: boolean; at?: { chapter: numbe
               <Icon name="list" size={20} />
               Chapters
             </button>
-            <button className={`tool ${lessonHere ? 'active' : ''}`} onClick={saveLesson} aria-label="Save this sentence as a lesson">
-              <Icon name="highlight" size={20} />
-              Save
-            </button>
             <button className={`tool ${bookmarkHere ? 'active' : ''}`} onClick={() => toggleBookmark()}>
               <Icon name="bookmark" size={20} />
               Bookmark
@@ -494,6 +506,22 @@ function PlayerView({ autoplay, at }: { autoplay: boolean; at?: { chapter: numbe
             pb.close();
             navigate('/');
           }}
+        />
+      )}
+      {ask && (
+        <AskSheet
+          book={book}
+          chapters={chapters}
+          position={{ chapter: state.chapter, offset: state.offset }}
+          sentence={currentChunk ? { start: currentChunk.start, end: currentChunk.end, text: currentChunk.text } : null}
+          annotations={annotations}
+          initialMode={ask}
+          onClose={() => setAsk(null)}
+          onGo={(pos, play) => {
+            narrator.seek(pos, play);
+            setAsk(null);
+          }}
+          onSaved={refreshAnnotations}
         />
       )}
       {noteDraft && (

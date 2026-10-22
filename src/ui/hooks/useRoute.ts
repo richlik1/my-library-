@@ -7,6 +7,7 @@ export type Route =
   | { name: 'progress' }
   | { name: 'book'; id: string; autoplay: boolean; at?: { chapter: number; offset: number } }
   | { name: 'quotes' }
+  | { name: 'club' }
   | { name: 'settings' }
   | { name: 'growth' }
   | { name: 'growth-book'; id: string }
@@ -29,6 +30,7 @@ function parse(hash: string): Route {
     };
   }
   if (first === 'quotes') return { name: 'quotes' };
+  if (first === 'club') return { name: 'club' };
   if (first === 'settings') return { name: 'settings' };
   if (first === 'library') return { name: 'library' };
   if (first === 'discover') return { name: 'discover' };

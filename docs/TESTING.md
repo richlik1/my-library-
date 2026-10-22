@@ -32,6 +32,9 @@ Updated 2026-10-22 (V2 Phase 1). Environment: Linux, Chromium (Playwright), Node
 | Listening time and goals | Real playback only; goal card; goal options; week, month, streak | passed |
 | XP, levels, achievements | Dedup ledger, formula levels, achievements, can be turned off | passed |
 | Quote collection | Save lesson while listening, tags, favorites, search, review XP once a day, export, open at passage | passed |
+| Local search / Ask My Book | Passages with chapter references, Explain this, Apply it, Search the book | passed |
+| Book Club | Discuss/Reflect answers saved; Test me and Debate honest when unavailable | passed |
+| Background sounds | Follow narration, fade, remembered (Chromium) | passed |
 | VoiceOver, Dynamic Type on iPhone | Screen reader and system text size | not run (needs iPhone) |
 
 ## Measured performance (this environment, not an iPhone)
@@ -69,5 +72,7 @@ two generated chapters.
 | 19 | Start a book, switch tabs, lock the phone | Keeps playing; mini-player shows it |
 | 20 | VoiceOver: tabs, mini-player, play/pause | Every control is announced with a clear name |
 | 21 | Listen 10 minutes with the phone locked (Natural voice), then open Progress | About 10 minutes counted today |
+| 22 | Voice & speed → Background sound: Rain, play, then lock the phone | Book keeps playing; note whether the rain continues |
+| 23 | Background sound with Bluetooth headphones | Both audible; narration clearly louder |
 
 Report results as passed / failed (with what happened) so this table can be updated.

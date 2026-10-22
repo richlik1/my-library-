@@ -109,3 +109,26 @@ Not done in Phase 1 (by design): goals, streaks, XP, achievements (Phase 2); AI 
 | Page references for PDFs | Missing: quotes show chapter only; page positions aren’t kept at import | — |
 
 “Explain This” and “Apply It” while listening need a local AI model: Phase 3.
+
+## Phases 3–5 results (2026-10-22)
+
+**Blocker for real AI:** no on-device language model can be downloaded or benchmarked here (Hugging Face is blocked, no GPU,
+no iPhone). Nothing below pretends to be AI. The app has the pieces an AI model would plug into (passage chunking, local
+search, context around the current sentence, citations), and each AI-only feature says plainly that it's not available.
+
+| Feature | Status | Evidence |
+|---|---|---|
+| Document chunking + local full-text search (BM25, stemming, chapter titles) with exact positions | Working and tested | `tests/search.test.ts` |
+| Ask My Book → Search the book: matching passages with chapter reference, Go there / Play from here | Working and tested | `e2e/learning.spec.ts` |
+| Explain this (while listening): the sentence, the text around it, related passages elsewhere, your chapter notes | Working and tested; no generated explanation | same |
+| Apply it: save a concrete action tied to the passage (tagged “action”, appears in Quotes) | Working and tested | same |
+| AI answers, “what does this word mean”, AI summaries | **Blocked** (no local model); shown as unavailable | — |
+| Daily Knowledge Recap: Quotes → Today’s review (3 least-recently-reviewed saved ideas), listen, mark reviewed (+5 XP once a day), notes | Working and tested | `e2e/habits.spec.ts` |
+| Book Club: Discuss and Reflect questions for the chapter you’re on, typed answers saved with the book | Working and tested | `e2e/learning.spec.ts` |
+| Book Club: Test me (Growth Library quizzes for matching books) | Working; other books say no questions exist rather than inventing them | same |
+| Book Club: Debate | **Blocked** (needs a model); shown as unavailable | same |
+| Smart recommendations (deterministic, explained, can be turned off) | Working and tested (Phase 1) | `tests/recommend.test.ts` |
+| Soundscapes: Rain, Ocean, Fireplace, Deep noise, White noise — generated in the app (no recordings, offline) | Working and tested in Chromium | `e2e/learning.spec.ts` |
+| Separate background volume, fade in/out, pause with narration, sleep timer (via narration pause), remembered | Working and tested in Chromium | same |
+| Soundscapes with the iPhone locked, Bluetooth, battery and memory | **Not tested** (needs iPhone). Built on Web Audio, separate from the narration player, so Lock Screen controls stay with the book; iOS may pause the background sound when locked | owner checklist |
+| Café soundscape | Missing: needs a real recording; not added rather than faked | — |

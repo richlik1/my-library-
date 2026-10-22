@@ -135,6 +135,9 @@ export interface Settings {
   streaks: boolean;
   /** Daily listening goal in minutes. */
   dailyGoalMinutes: number;
+  /** Background sound under narration (null = none) and its volume, 0–1. */
+  ambient: 'rain' | 'ocean' | 'fire' | 'brown' | 'white' | null;
+  ambientVolume: number;
   /** Bumped when new default categories are added, so existing lists get them once. */
   categoriesVersion?: number;
 }
@@ -167,6 +170,8 @@ export const DEFAULT_SETTINGS: Settings = {
   habits: true,
   streaks: true,
   dailyGoalMinutes: 15,
+  ambient: null,
+  ambientVolume: 0.3,
   showNoveltyVoices: false,
   categories: DEFAULT_CATEGORIES,
 };

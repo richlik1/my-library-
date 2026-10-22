@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { DEFAULT_KOKORO_VOICE, KOKORO_VOICES } from '../../core/audio/kokoroEngine';
 import type { Job } from '../../core/audio/queue';
 import { encodeWav } from '../../core/audio/wav';
@@ -13,6 +13,7 @@ import { formatBytes } from './BookDetailsSheet';
 import { Icon } from './Icon';
 import { useSettings } from '../hooks/settings';
 import { activePreset, allPresets, choosePreset, newPresetId } from '../presets';
+import { SOUNDSCAPES, ambient } from '../ambient';
 
 /** Live list of generation jobs for one book. */
 export function useAudioJobs(bookId: string): Job[] {
@@ -109,6 +110,7 @@ export function NarrationPanel({
   return (
     <section style={{ marginBottom: 18 }}>
       <PresetPicker book={book} onBookChange={onBookChange} />
+      <AmbientPicker />
       <div className="seg-nav" role="radiogroup" aria-label="Narration">
         <a
           href="#"
@@ -375,6 +377,63 @@ function PresetPicker({ book, onBookChange }: { book: Book; onBookChange(b: Book
             Save
           </button>
         </form>
+      )}
+    </div>
+  );
+}
+
+/** Optional background sound under the narration. */
+function AmbientPicker() {
+  const { settings, update } = useSettings();
+  const [, force] = useState(0);
+  useEffect(() => {
+    const unsub = ambient.subscribe(() => force((n) => n + 1));
+    return () => {
+      unsub();
+    };
+  }, []);
+  const status = ambient.state;
+  return (
+    <div style={{ marginBottom: 14 }}>
+      <div className="rate-head" style={{ marginBottom: 8 }}>
+        <span>Background sound</span>
+        <span className="small muted" role="status">
+          {status === 'playing' ? 'Playing' : status === 'paused' ? 'Plays with narration' : ''}
+        </span>
+      </div>
+      <div className="chips" role="radiogroup" aria-label="Background sound" style={{ flexWrap: 'wrap' }}>
+        {[{ id: null, name: 'None' }, ...SOUNDSCAPES].map((s) => (
+          <button
+            key={s.id ?? 'none'}
+            role="radio"
+            aria-checked={settings.ambient === s.id}
+            className={`chip ${settings.ambient === s.id ? 'active' : ''}`}
+            onClick={() => update({ ambient: s.id as typeof settings.ambient })}
+          >
+            {s.name}
+          </button>
+        ))}
+      </div>
+      {settings.ambient && (
+        <div className="rate-row" style={{ marginTop: 8 }}>
+          <div className="rate-head">
+            <span>Background volume</span>
+            <span>{Math.round(settings.ambientVolume * 100)}%</span>
+          </div>
+          <input
+            type="range"
+            min={0.05}
+            max={0.8}
+            step={0.05}
+            value={settings.ambientVolume}
+            style={{ '--fill': `${((settings.ambientVolume - 0.05) / 0.75) * 100}%` } as CSSProperties}
+            onChange={(e) => update({ ambientVolume: Number(e.target.value) })}
+            aria-label="Background volume"
+          />
+          <p className="small muted" style={{ margin: '6px 0 0' }}>
+            Made by the app, so it works offline. It fades out when narration pauses or the sleep timer stops it. With the phone locked, iOS may pause it while the book keeps playing.
+          </p>
+        </div>
       )}
     </div>
   );
