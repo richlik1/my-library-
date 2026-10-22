@@ -249,8 +249,8 @@ export function SettingsPage() {
             setSay('');
           }}
         >
-          <input className="input" style={{ flex: 1, minWidth: 110 }} placeholder="Word (e.g. StayOps)" aria-label="Word" value={word} onChange={(e) => setWord(e.target.value)} />
-          <input className="input" style={{ flex: 1, minWidth: 110 }} placeholder="Say it as (e.g. Stay Ops)" aria-label="Say it as" value={say} onChange={(e) => setSay(e.target.value)} />
+          <input className="input" style={{ flex: 1, minWidth: 110 }} placeholder="Word" aria-label="Word" value={word} onChange={(e) => setWord(e.target.value)} />
+          <input className="input" style={{ flex: 1, minWidth: 110 }} placeholder="Say it as" aria-label="Say it as" value={say} onChange={(e) => setSay(e.target.value)} />
           <button className="btn" type="submit">
             Add
           </button>
