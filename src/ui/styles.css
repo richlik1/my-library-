@@ -2242,3 +2242,11 @@ main.with-tabs .page {
   font-weight: 600;
   color: var(--text);
 }
+.whats-new {
+  margin: 0 0 16px;
+  padding-left: 18px;
+  line-height: 1.5;
+}
+.whats-new li {
+  margin-bottom: 10px;
+}

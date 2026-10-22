@@ -110,3 +110,15 @@ test('Discover explains its suggestions; Progress shows real counts; theme can b
   await page.reload();
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
 });
+
+test('after an update, people with books see what’s new once', async ({ page }) => {
+  await addBook(page);
+  await page.evaluate(() => localStorage.setItem('ml-seen-version', '1.0.0'));
+  await page.reload();
+  const sheet = page.getByRole('dialog', { name: /What’s new in My Library/ });
+  await expect(sheet).toBeVisible();
+  await sheet.getByRole('button', { name: 'Got it' }).click();
+  await page.reload();
+  await expect(page.getByRole('heading', { name: 'Continue listening' }).or(page.getByRole('heading', { name: 'Recently added' }))).toBeVisible();
+  await expect(sheet).toHaveCount(0);
+});
