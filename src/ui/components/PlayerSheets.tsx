@@ -14,15 +14,23 @@ export function ChaptersSheet({
   current,
   onPick,
   onClose,
+  onEdit,
 }: {
   chapters: Chapter[];
   current: number;
   onPick(i: number): void;
   onClose(): void;
+  /** Correct the text of the current chapter. */
+  onEdit?(): void;
 }) {
   const { settings } = useSettings();
   return (
     <Sheet title="Chapters" onClose={onClose}>
+      {onEdit && (
+        <button className="btn btn-ghost" style={{ marginBottom: 8 }} onClick={onEdit}>
+          <Icon name="edit" size={16} /> Fix the text of this chapter
+        </button>
+      )}
       <ul className="list">
         {chapters.map((c, i) => (
           <li key={i}>
@@ -401,4 +409,50 @@ function blobToBase64(blob: Blob): Promise<string> {
     r.onerror = () => reject(r.error);
     r.readAsDataURL(blob);
   });
+}
+
+/** Correct a chapter that was imported badly (wrong order, leftover headers, missing words). */
+export function EditChapterSheet({
+  chapter,
+  onClose,
+  onSave,
+}: {
+  chapter: Chapter;
+  onClose(): void;
+  onSave(title: string, text: string): Promise<void>;
+}) {
+  const [title, setTitle] = useState(chapter.title);
+  const [text, setText] = useState(chapter.text);
+  const [busy, setBusy] = useState(false);
+  const changed = title !== chapter.title || text !== chapter.text;
+  return (
+    <Sheet title="Fix chapter text" onClose={onClose}>
+      <p className="small muted" style={{ marginTop: 0 }}>
+        Correct what the import got wrong: leftover headers or page numbers, words in the wrong order, missing text. Leave a blank line between
+        paragraphs. Your notes and highlights move with their text. Natural-voice audio for this chapter is made again the next time you play it.
+      </p>
+      <label className="field">
+        <span>Chapter title</span>
+        <input className="input" value={title} onChange={(e) => setTitle(e.target.value)} />
+      </label>
+      <label className="field">
+        <span>Text</span>
+        <textarea className="input chapter-editor" rows={14} value={text} onChange={(e) => setText(e.target.value)} />
+      </label>
+      <button
+        className="btn btn-primary"
+        disabled={!changed || !text.trim() || busy}
+        onClick={async () => {
+          setBusy(true);
+          try {
+            await onSave(title, text.replace(/\r\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim());
+          } finally {
+            setBusy(false);
+          }
+        }}
+      >
+        Save corrected text
+      </button>
+    </Sheet>
+  );
 }

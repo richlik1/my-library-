@@ -90,6 +90,16 @@ describe('Narrator', () => {
     expect(engine.last).toBe('sentence follows it very nicely indeed.');
   });
 
+  it('marks word timing only after the voice reports a word boundary', () => {
+    const n = new Narrator(engine, chapters, opts);
+    n.play();
+    engine.start();
+    expect(n.getState().wordTiming).toBeFalsy();
+    engine.handlers!.onBoundary(4);
+    expect(n.getState().wordTiming).toBe(true);
+    expect(n.getState().offset).toBe(4);
+  });
+
   it('starts from a saved position', () => {
     const n = new Narrator(engine, chapters, opts, { chapter: 1, offset: C.length + 4 });
     n.play();

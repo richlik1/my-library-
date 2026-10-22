@@ -14,8 +14,10 @@ interface Props {
   chapterIndex: number;
   chunks: Chunk[];
   activeChunk: number;
-  /** Current word offset, or -1 when not speaking. */
+  /** Current word offset, or -1 when not speaking or when the voice doesn't report words. */
   wordOffset: number;
+  /** Narration is playing (the text follows it). */
+  playing: boolean;
   annotations: Annotation[];
   fontSize: number;
   follow: boolean;
@@ -61,7 +63,7 @@ export function Reader(p: Props) {
 
   // Follow the narration unless the reader scrolled by hand in the last few seconds.
   useEffect(() => {
-    if (!p.follow || p.wordOffset < 0) return;
+    if (!p.follow || !p.playing) return;
     if (Date.now() - lastUserScroll.current < 4000) return;
     const el = scrollRef.current?.querySelector<HTMLElement>(`[data-i="${p.activeChunk}"]`);
     const box = scrollRef.current;
@@ -71,7 +73,7 @@ export function Reader(p: Props) {
     if (r.top < b.top + b.height * 0.2 || r.bottom > b.top + b.height * 0.7) {
       box.scrollTo({ top: box.scrollTop + r.top - b.top - b.height * 0.33, behavior: 'smooth' });
     }
-  }, [p.activeChunk, p.follow, p.wordOffset]);
+  }, [p.activeChunk, p.follow, p.playing]);
 
   // Jump to the current sentence when a chapter opens.
   useEffect(() => {

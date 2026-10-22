@@ -69,6 +69,10 @@ export function UpdatePrompt() {
     <Sheet title={`What’s new in My Library ${__APP_VERSION__}`} onClose={() => setWhatsNew(false)}>
       <ul className="whats-new">
         <li>
+          <strong>Better text:</strong> two-column PDFs read in the right order, and you can fix any chapter’s text (Chapters → Fix the text of this
+          chapter). Highlighting follows each word only when the voice reports words; otherwise it highlights the sentence.
+        </li>
+        <li>
           <strong>Faster, more reliable natural voice:</strong> it uses several processor cores at once (about twice as fast in testing). If your phone
           gets stuck that way, it notices within a minute or two and switches to a safer way by itself, and remembers it.
         </li>

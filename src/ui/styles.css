@@ -2261,3 +2261,9 @@ main.with-tabs .page {
   background: var(--surface-2);
   color: var(--text-2);
 }
+.chapter-editor {
+  font-family: var(--serif);
+  font-size: 15px;
+  line-height: 1.55;
+  min-height: 40vh;
+}

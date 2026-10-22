@@ -1,39 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { speechStub } from './fixtures';
-
-/**
- * Installs a deterministic stand-in for Kokoro (no 92 MB model download):
- * 40 ms of quiet tone per character. Everything else — queue, cache,
- * audio files, media player, progress saving — is the real app code.
- */
-const testEngine = () => {
-  const w = window as unknown as Record<string, unknown>;
-  const calls: string[] = [];
-  w.__engineCalls = calls;
-  w.__MY_LIBRARY_TEST_ENGINE__ = {
-    id: 'test-tone',
-    label: 'Test tone',
-    loaded: false,
-    async load(onProgress?: (f: number, l: string) => void) {
-      onProgress?.(1, 'Voice model ready');
-      (this as { loaded: boolean }).loaded = true;
-    },
-    isLoaded() {
-      return (this as { loaded: boolean }).loaded;
-    },
-    voices() {
-      return [{ id: 'af_heart', name: 'Heart', gender: 'female', accent: 'American' }];
-    },
-    async synthesize(text: string) {
-      calls.push(text);
-      const sr = 8000;
-      const n = Math.round(text.length * 0.04 * sr);
-      const s = new Float32Array(n);
-      for (let i = 0; i < n; i++) s[i] = 0.05 * Math.sin((2 * Math.PI * 220 * i) / sr);
-      return { samples: s, sampleRate: sr };
-    },
-  };
-};
+import { speechStub, testEngine } from './fixtures';
 
 const BOOK = ['Chapter 1', '', 'The first chapter has one short sentence.', '', 'Chapter 2', '', 'The second chapter starts here and keeps going.'].join('\n');
 

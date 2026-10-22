@@ -31,6 +31,8 @@ interface PlaybackSession {
   setBook(b: Book): void;
   /** Stops and unloads the current book. */
   close(): void;
+  /** Uses corrected chapter text (the player restarts at the same place). */
+  replaceChapters(bookId: string, chapters: Chapter[]): void;
 }
 
 const Ctx = createContext<PlaybackSession | null>(null);
@@ -94,6 +96,7 @@ export function PlaybackProvider({ children }: { children: ReactNode }) {
     [settings, update],
   );
 
+  const replaceChapters = useCallback((bookId: string, chapters: Chapter[]) => setSession((s) => (s && s.book.id === bookId ? { ...s, chapters } : s)), []);
   const setBook = useCallback((b: Book) => setSession((s) => (s && s.book.id === b.id ? { ...s, book: b } : s)), []);
   const close = useCallback(() => {
     setSession(null);
@@ -101,8 +104,8 @@ export function PlaybackProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const value = useMemo<PlaybackSession>(
-    () => ({ session, narrator: live.narrator, state: live.state, voices, voiceId, open, setBook, close }),
-    [session, live, voices, voiceId, open, setBook, close],
+    () => ({ session, narrator: live.narrator, state: live.state, voices, voiceId, open, setBook, close, replaceChapters }),
+    [session, live, voices, voiceId, open, setBook, close, replaceChapters],
   );
 
   return (

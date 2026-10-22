@@ -22,6 +22,12 @@ export interface NarratorState {
   duration?: number;
   /** Audio-file playback only: the chapter's audio isn't generated yet. */
   waitingForAudio?: boolean;
+  /**
+   * True once the voice has reported real word positions. Only then is the
+   * current word highlighted; otherwise highlighting is by sentence (word
+   * positions are never estimated from speaking speed).
+   */
+  wordTiming?: boolean;
 }
 
 type Listener = (s: NarratorState) => void;
@@ -269,7 +275,8 @@ export class Narrator implements PlaybackController {
       onBoundary: (ci) => {
         if (myGen !== this.gen) return;
         const offset = Math.min(chunk.end, from + ci);
-        if (offset > this.state.offset) this.set({ offset });
+        if (offset > this.state.offset) this.set({ offset, wordTiming: true });
+        else if (!this.state.wordTiming) this.set({ wordTiming: true });
       },
       onEnd: () => {
         if (myGen !== this.gen) return;
@@ -328,7 +335,8 @@ export class Narrator implements PlaybackController {
         onBoundary: (i, ci) => {
           const m = map[i];
           if (!live() || !m || m.chapter !== this.state.chapter || m.chunkIndex !== this.state.chunkIndex) return;
-          if (m.start + ci > this.state.offset) this.set({ offset: m.start + ci });
+          if (m.start + ci > this.state.offset) this.set({ offset: m.start + ci, wordTiming: true });
+          else if (!this.state.wordTiming) this.set({ wordTiming: true });
         },
         onDone: () => {
           if (!live()) return;

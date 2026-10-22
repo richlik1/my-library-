@@ -16,6 +16,7 @@ import {
   saveProgress,
   saveSettings,
   updateBook,
+  updateChapterText,
 } from '../src/core/storage/db';
 import type { ImportedBook } from '../src/core/types';
 
@@ -39,6 +40,25 @@ describe('library storage', () => {
   beforeEach(async () => {
     await resetDbConnection();
     await clearAll();
+  });
+
+  it('corrects a chapter’s text and keeps notes on their quoted words', async () => {
+    const book = await saveImportedBook(
+      { ...imported, chapters: [{ title: 'One', text: 'PAGE 4 Header. The keeper lit the lamp. He waited all night.' }] },
+      { name: 'b.txt', size: 5, type: 'text/plain', data: new Blob(['x']) },
+      'Fiction',
+    );
+    const text = 'PAGE 4 Header. The keeper lit the lamp. He waited all night.';
+    const q1 = 'The keeper lit the lamp.';
+    await saveAnnotation({ bookId: book.id, kind: 'highlight', chapter: 0, start: text.indexOf(q1), end: text.indexOf(q1) + q1.length, quote: q1 });
+    await saveAnnotation({ bookId: book.id, kind: 'note', chapter: 0, start: 0, end: 6, quote: 'PAGE 4', note: 'header' });
+    const r = await updateChapterText(book.id, 0, 'The Lamp', 'The keeper lit the lamp. He waited all night.');
+    expect(r).toMatchObject({ moved: 1, unmatched: 1 });
+    expect((await getContent(book.id))!.chapters[0]).toEqual({ title: 'The Lamp', text: 'The keeper lit the lamp. He waited all night.' });
+    const notes = await listAnnotations(book.id);
+    const h = notes.find((a) => a.quote === q1)!;
+    expect('The keeper lit the lamp. He waited all night.'.slice(h.start, h.end)).toBe(q1);
+    expect((await listBooks())[0].charCount).toBe('The keeper lit the lamp. He waited all night.'.length);
   });
 
   it('saves and lists books with content and original file', async () => {

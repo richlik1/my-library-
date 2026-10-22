@@ -2,7 +2,8 @@ import { useCallback, useEffect, useState, type CSSProperties } from 'react';
 import type { Chunk } from '../../core/speech/chunker';
 import type { VoiceInfo } from '../../core/speech/engine';
 import { isIOS } from '../../core/speech/webSpeechEngine';
-import { deleteAnnotation, listAnnotations, saveAnnotation } from '../../core/storage/db';
+import { deleteAnnotation, listAnnotations, saveAnnotation, updateChapterText } from '../../core/storage/db';
+import { forgetIndex } from '../../core/search';
 import type { Annotation, HighlightColor } from '../../core/types';
 import { speechEngine } from '../engine';
 import { isNativeApp } from '../platform';
@@ -14,7 +15,7 @@ import { BookDetailsSheet } from './BookDetailsSheet';
 import { NarrationPanel, useAudioJobs, useReadyChapters } from './NarrationPanel';
 import { DEFAULT_KOKORO_VOICE, KOKORO_VOICES } from '../../core/audio/kokoroEngine';
 import { Icon } from './Icon';
-import { AnnotationsSheet, COLORS, ChaptersSheet, NoteSheet, SleepSheet, VoiceSheet, swatch } from './PlayerSheets';
+import { AnnotationsSheet, COLORS, ChaptersSheet, EditChapterSheet, NoteSheet, SleepSheet, VoiceSheet, swatch } from './PlayerSheets';
 import { Reader, type TextRange } from './Reader';
 import { AskSheet, type AskMode } from './AskSheet';
 
@@ -54,7 +55,7 @@ export function Player({ id, autoplay, at }: { id: string; autoplay: boolean; at
 }
 
 type Popover = { kind: 'chunk'; chunk: Chunk; rect: DOMRect } | { kind: 'selection'; range: TextRange; rect: DOMRect } | null;
-type SheetName = 'chapters' | 'notes' | 'voice' | 'sleep' | 'details' | null;
+type SheetName = 'chapters' | 'notes' | 'voice' | 'sleep' | 'details' | 'edit' | null;
 
 function fmt(sec: number) {
   sec = Math.max(0, Math.round(sec));
@@ -223,7 +224,8 @@ function PlayerView({ autoplay, at }: { autoplay: boolean; at?: { chapter: numbe
           chapterIndex={state.chapter}
           chunks={chunks}
           activeChunk={state.chunkIndex}
-          wordOffset={playing ? state.offset : -1}
+          wordOffset={playing && state.wordTiming ? state.offset : -1}
+          playing={playing}
           annotations={annotations}
           fontSize={settings.fontSize}
           follow={settings.followAlong}
@@ -455,6 +457,22 @@ function PlayerView({ autoplay, at }: { autoplay: boolean; at?: { chapter: numbe
           onPick={(i) => {
             narrator.seek({ chapter: i, offset: 0 });
             setSheet(null);
+          }}
+          onEdit={() => setSheet('edit')}
+        />
+      )}
+      {sheet === 'edit' && chapter && (
+        <EditChapterSheet
+          chapter={chapter}
+          onClose={() => setSheet(null)}
+          onSave={async (title, text) => {
+            narrator.pause();
+            const r = await updateChapterText(book.id, state.chapter, title, text);
+            forgetIndex(book.id);
+            pb.replaceChapters(book.id, r.chapters);
+            await refreshAnnotations();
+            setSheet(null);
+            toast(r.unmatched ? `Text saved. ${r.unmatched} note${r.unmatched > 1 ? 's' : ''} lost their exact text and stay nearby.` : 'Text saved');
           }}
         />
       )}

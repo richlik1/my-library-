@@ -151,6 +151,11 @@ export function indexFor(bookId: string, chapters: Chapter[]): BookIndex {
   return idx;
 }
 
+/** Drop a book's index (after its text changes or it's deleted). */
+export function forgetIndex(bookId: string) {
+  cache.delete(bookId);
+}
+
 /** Status of AI answers on this device. There is no local language model yet. */
 export function aiAnswerAvailability() {
   return {

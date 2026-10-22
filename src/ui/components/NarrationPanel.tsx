@@ -141,14 +141,15 @@ export function NarrationPanel({
       {mode === 'device' ? (
         <p className="muted small" style={{ marginTop: 0 }}>
           Instant, using your device’s built-in voices. On iPhone it stops when the screen locks. Choose <strong>Natural voice</strong> to
-          listen with the screen locked.
+          listen with the screen locked. Highlighting: word by word when your device’s voice reports words, otherwise sentence by sentence.
         </p>
       ) : (
         <>
           <p className="muted small" style={{ marginTop: 0 }}>
             Kokoro creates real audio on this device, free and private. It downloads a 92 MB voice model once, then makes each chapter
             ahead of time. Making a chapter can take longer than listening to it, so start a few chapters (or the whole book) early and
-            keep the app open while it works. Finished chapters keep playing with the screen locked and work offline.
+            keep the app open while it works. Finished chapters keep playing with the screen locked and work offline. Highlighting: sentence by
+            sentence (this voice doesn’t report the timing of each word).
           </p>
 
           <div className="rate-row" style={{ marginBottom: 6 }}>

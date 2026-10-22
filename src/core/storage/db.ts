@@ -1,6 +1,6 @@
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
 import { newId } from '../id';
-import type { Annotation, Book, BookContent, ImportedBook, Progress, Settings, StoredFile } from '../types';
+import type { Annotation, Book, BookContent, Chapter, ImportedBook, Progress, Settings, StoredFile } from '../types';
 import { DEFAULT_SETTINGS } from '../types';
 import type { DailyBlock, GrowthBookState, GrowthNote, WeeklyReview } from '../../growth/types';
 import type { ChapterAudio } from '../audio/types';
@@ -156,6 +156,39 @@ export async function deleteBook(id: string) {
 
 export async function getContent(bookId: string) {
   return (await db()).get('contents', bookId);
+}
+
+/**
+ * Replaces a chapter's text (correcting an import). Notes and highlights in
+ * that chapter are moved to where their quoted text now is; ones whose text
+ * was removed are kept at the nearest valid place. The chapter's cached audio
+ * is regenerated next time it's needed (its text changed).
+ */
+export async function updateChapterText(bookId: string, index: number, title: string, text: string): Promise<{ chapters: Chapter[]; moved: number; unmatched: number }> {
+  const d = await db();
+  const content = await d.get('contents', bookId);
+  if (!content || !content.chapters[index]) throw new Error('Chapter not found');
+  const chapters = content.chapters.map((c, i) => (i === index ? { ...c, title: title.trim() || c.title, text } : c));
+  const tx = d.transaction(['contents', 'books', 'annotations'], 'readwrite');
+  await tx.objectStore('contents').put({ ...content, chapters });
+  const book = await tx.objectStore('books').get(bookId);
+  if (book) await tx.objectStore('books').put({ ...book, charCount: chapters.reduce((n, c) => n + c.text.length, 0) });
+  let moved = 0;
+  let unmatched = 0;
+  for (const a of await tx.objectStore('annotations').index('byBook').getAll(bookId)) {
+    if (a.chapter !== index || text.slice(a.start, a.end) === a.quote) continue;
+    const at = text.indexOf(a.quote);
+    if (at >= 0) {
+      moved++;
+      await tx.objectStore('annotations').put({ ...a, start: at, end: at + a.quote.length });
+    } else {
+      unmatched++;
+      const start = Math.min(a.start, Math.max(0, text.length - 1));
+      await tx.objectStore('annotations').put({ ...a, start, end: Math.min(text.length, Math.max(start + 1, a.end)) });
+    }
+  }
+  await tx.done;
+  return { chapters, moved, unmatched };
 }
 
 /** The original file, always returned as a Blob. */

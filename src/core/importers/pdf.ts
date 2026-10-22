@@ -46,6 +46,45 @@ interface Line {
   h: number;
 }
 
+/**
+ * Two-column pages: some PDFs store text row by row across both columns. If a
+ * page has an empty vertical gutter with several lines of text on each side,
+ * returns the left column's items followed by the right column's, so lines
+ * are rebuilt in reading order. Other pages are returned unchanged.
+ */
+export function orderColumns(items: TextItem[]): TextItem[] {
+  const spans = items
+    .filter((it) => typeof it.str === 'string' && it.str.trim())
+    .map((it) => ({ it, x: it.transform[4], end: it.transform[4] + (it.width || 0), y: Math.round(it.transform[5]) }));
+  if (spans.length < 6) return items;
+  const minX = Math.min(...spans.map((s) => s.x));
+  const maxX = Math.max(...spans.map((s) => s.end));
+  const width = maxX - minX;
+  if (width <= 0) return items;
+  // Mark every point of the page width covered by some text, then look for the widest
+  // uncovered band in the middle of the page.
+  const bins = 200;
+  const covered = new Uint8Array(bins);
+  for (const s of spans) for (let b = Math.floor(((s.x - minX) / width) * bins); b < Math.min(bins, Math.ceil(((s.end - minX) / width) * bins)); b++) covered[b] = 1;
+  let best = { from: -1, len: 0 };
+  for (let b = Math.floor(bins * 0.25); b < bins * 0.75; b++) {
+    if (covered[b]) continue;
+    let e = b;
+    while (e < bins && !covered[e]) e++;
+    if (e - b > best.len) best = { from: b, len: e - b };
+    b = e;
+  }
+  // A gutter is at least ~2% of the text width.
+  if (best.len < bins * 0.02) return items;
+  const gutterX = minX + ((best.from + best.len / 2) / bins) * width;
+  const left = spans.filter((s) => s.end <= gutterX);
+  const right = spans.filter((s) => s.x >= gutterX);
+  const rows = (list: typeof spans) => new Set(list.map((s) => s.y)).size;
+  if (rows(left) < 3 || rows(right) < 3) return items;
+  const leftSet = new Set(left.map((s) => s.it));
+  return [...items.filter((it) => leftSet.has(it)), ...items.filter((it) => !leftSet.has(it))];
+}
+
 /** Rebuilds visual lines from PDF.js text items. */
 export function itemsToLines(items: TextItem[]): Line[] {
   const lines: Line[] = [];
@@ -299,7 +338,7 @@ export async function importPdf(
       const page = await doc.getPage(n);
       if (n === 1) cover = await renderCover(page);
       const content = await page.getTextContent();
-      const lines = itemsToLines(content.items.filter((i): i is TextItem => 'str' in i));
+      const lines = itemsToLines(orderColumns(content.items.filter((i): i is TextItem => 'str' in i)));
       const chars = lines.reduce((s, l) => s + l.text.replace(/\s/g, '').length, 0);
       if (chars < 20) {
         try {
