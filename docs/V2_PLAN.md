@@ -155,3 +155,7 @@ doubled for the first sentence after loading); loading has a 2-minute no-progres
 switches to the next safer way to run the voice (several cores → one core in the background → on the page), remembers it
 on the device, and retries. Tested with the real model by forcing the multi-core mode to hang: it switched to one core and
 the speed test completed (`e2e/kokoro-real.spec.ts`).
+
+2.1.2: each way of running the voice is now tested with one short word right after it loads (45 s limit), so a stuck
+mode is detected in under a minute instead of after a long sentence's time limit. Settings → Test natural voice speed →
+"Details for troubleshooting" shows a log (modes tried, load and test times, errors) with a Copy button.

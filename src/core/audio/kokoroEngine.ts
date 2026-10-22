@@ -51,6 +51,15 @@ const MODE_KEY = 'ml-voice-mode';
 const LOAD_STALL_MS = 120_000;
 const SYNTH_BASE_MS = 45_000;
 const SYNTH_PER_CHAR_MS = 600;
+const PROBE_MS = 45_000;
+
+/** What happened while starting and running the voice on this device (shown in Settings, for troubleshooting). */
+const voiceLog: string[] = [];
+export function vlog(line: string) {
+  voiceLog.push(`${new Date().toLocaleTimeString()} ${line}`);
+  if (voiceLog.length > 40) voiceLog.shift();
+}
+export const getVoiceLog = () => [...voiceLog];
 
 function savedMode(): VoiceMode | null {
   try {
@@ -132,8 +141,10 @@ export class KokoroEngine implements NeuralEngine {
       // Start with the way that last worked on this device (a mode that got stuck is skipped from then on).
       const start = Math.max(0, modes.indexOf(savedMode() ?? modes[0]));
       let lastError: unknown = null;
+      vlog(`start: modes ${modes.join(' > ')}, from ${modes[start]}; isolated=${typeof crossOriginIsolated !== 'undefined' && crossOriginIsolated}, cores=${navigator.hardwareConcurrency}, device=${this.opts.device ?? 'wasm'}`);
       for (let i = start; i < modes.length; i++) {
         const m = modes[i];
+        const t0 = Date.now();
         try {
           if (m === 'page') await this.loadInPage(onProgress);
           else {
@@ -141,13 +152,28 @@ export class KokoroEngine implements NeuralEngine {
             await this.loadInWorker(onProgress, threads);
             this.workerReady = true;
             this.threads = threads;
+            vlog(`${m}: model loaded in ${((Date.now() - t0) / 1000).toFixed(1)} s`);
+            // Prove it can speak before using it: some phones load the model, then never finish a sentence.
+            onProgress?.(1, 'Testing the voice…');
+            const t1 = Date.now();
+            const probeMs = (globalThis as { __MY_LIBRARY_VOICE_PROBE_MS__?: number }).__MY_LIBRARY_VOICE_PROBE_MS__ ?? PROBE_MS;
+            let timer: ReturnType<typeof setTimeout> | null = null;
+            await Promise.race([
+              this.call({ type: 'synth', text: 'Hi.', voice: DEFAULT_KOKORO_VOICE }),
+              new Promise<never>((_, rej) => (timer = setTimeout(() => rej(new Error(`no answer to a test word in ${probeMs / 1000} s`)), probeMs))),
+            ]).finally(() => timer && clearTimeout(timer));
+            vlog(`${m}: test word in ${((Date.now() - t1) / 1000).toFixed(1)} s`);
+            this.warm = true;
           }
           this.mode = m;
+          saveMode(m);
           onProgress?.(1, 'Voice model ready');
           return;
         } catch (e) {
+          vlog(`${m}: failed after ${((Date.now() - t0) / 1000).toFixed(0)} s: ${(e as Error)?.message ?? e}`);
           lastError = e;
           this.stopWorker();
+          this.workerReady = false;
           if (i + 1 < modes.length) {
             saveMode(modes[i + 1]);
             onProgress?.(0, 'Trying a safer way to run the voice…');
@@ -175,6 +201,7 @@ export class KokoroEngine implements NeuralEngine {
    * way to run it from now on; the next sentence reloads it that way.
    */
   private demote() {
+    vlog(`${this.mode}: a sentence took too long; switching to a safer way`);
     const modes = this.modes();
     const i = this.mode ? modes.indexOf(this.mode) : -1;
     if (i >= 0 && i + 1 < modes.length) saveMode(modes[i + 1]);

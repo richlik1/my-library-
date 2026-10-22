@@ -11,7 +11,7 @@ import { downloadBlob } from './PlayerSheets';
 import { ImportCheck } from './ImportCheck';
 import { isNativeApp } from '../platform';
 import { benchmarkVoice, describeBenchmark } from '../../core/audio/benchmark';
-import { DEFAULT_KOKORO_VOICE, voiceThreads } from '../../core/audio/kokoroEngine';
+import { DEFAULT_KOKORO_VOICE, getVoiceLog, voiceThreads } from '../../core/audio/kokoroEngine';
 import { neuralEngine } from '../narration';
 
 export function SettingsPage() {
@@ -338,6 +338,25 @@ export function SettingsPage() {
             {bench.text}
             {bench.busy && benchSecs > 0 ? ` (${benchSecs} s)` : ''}
           </p>
+        )}
+        {bench && !bench.busy && (
+          <details style={{ marginTop: 8 }}>
+            <summary className="small">Details for troubleshooting</summary>
+            <pre className="voice-log">{[navigator.userAgent, ...getVoiceLog()].join('\n')}</pre>
+            <button
+              className="btn"
+              onClick={async () => {
+                try {
+                  await navigator.clipboard.writeText([bench.text, navigator.userAgent, ...getVoiceLog()].join('\n'));
+                  toast('Copied');
+                } catch {
+                  toast('Couldn’t copy; take a screenshot instead', { kind: 'error' });
+                }
+              }}
+            >
+              Copy details
+            </button>
+          </details>
         )}
       </section>
 

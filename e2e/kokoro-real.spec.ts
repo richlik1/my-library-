@@ -123,7 +123,7 @@ test('real Kokoro: if the multi-core voice gets stuck, it switches to one core a
   await page.addInitScript(() => {
     const w = window as unknown as Record<string, unknown>;
     w.__MY_LIBRARY_VOICE_HANG__ = 'threads';
-    w.__MY_LIBRARY_VOICE_SYNTH_MS__ = 10_000;
+    w.__MY_LIBRARY_VOICE_PROBE_MS__ = 20_000;
   });
   await page.goto('./#/settings');
   await page.evaluate(() => navigator.serviceWorker.ready);
@@ -143,4 +143,9 @@ test('real Kokoro: if the multi-core voice gets stuck, it switches to one core a
   console.log(`Stuck-voice fallback: ${text}`);
   expect(text).toContain('one processor core, in the background');
   expect(await page.evaluate(() => localStorage.getItem('ml-voice-mode'))).toBe('single');
+  await page.getByText('Details for troubleshooting').click();
+  const log = await page.locator('.voice-log').textContent();
+  console.log(`Voice log:\n${log}`);
+  expect(log).toMatch(/threads: failed after \d+ s: no answer to a test word/);
+  expect(log).toMatch(/single: test word in/);
 });
