@@ -146,3 +146,12 @@ automatically. Measured here with the real Kokoro model (Chromium, 4-core CPU):
 
 Not yet measured on iPhone (newer iPhones have 6 cores, so 4 threads). Covered by `e2e/v2.spec.ts` (isolation on, PDF
 import and offline still work) and the opt-in real-model tests.
+
+## Stuck voice on iPhone (2.1.1)
+
+Owner report: Settings → Test natural voice speed stayed on "Making a test sentence…" (model loaded, first sentence never
+finished). Cause not reproducible here (no iPhone). Fix: every sentence has a time limit (45 s + 0.6 s per character,
+doubled for the first sentence after loading); loading has a 2-minute no-progress limit. When either is hit, the app
+switches to the next safer way to run the voice (several cores → one core in the background → on the page), remembers it
+on the device, and retries. Tested with the real model by forcing the multi-core mode to hang: it switched to one core and
+the speed test completed (`e2e/kokoro-real.spec.ts`).

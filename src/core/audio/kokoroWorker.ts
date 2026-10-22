@@ -7,7 +7,7 @@ import { env as hfEnv } from '@huggingface/transformers';
 import { KokoroTTS, env } from 'kokoro-js';
 
 type In =
-  | { id: number; type: 'load'; modelId: string; device: 'wasm' | 'webgpu'; wasmPaths: string; host?: string; threads: number }
+  | { id: number; type: 'load'; modelId: string; device: 'wasm' | 'webgpu'; wasmPaths: string; host?: string; threads: number; hang?: boolean }
   | { id: number; type: 'synth'; text: string; voice: string };
 
 interface KokoroLike {
@@ -16,6 +16,7 @@ interface KokoroLike {
 
 let tts: KokoroLike | null = null;
 let loading: Promise<void> | null = null;
+let hang = false;
 const post = (m: unknown, transfer: Transferable[] = []) => (self as unknown as DedicatedWorkerGlobalScope).postMessage(m, transfer);
 
 async function load(m: Extract<In, { type: 'load' }>) {
@@ -42,6 +43,7 @@ self.onmessage = async (e: MessageEvent<In>) => {
   const m = e.data;
   try {
     if (m.type === 'load') {
+      hang = !!m.hang;
       loading ??= load(m).catch((err) => {
         loading = null;
         throw err;
@@ -50,6 +52,7 @@ self.onmessage = async (e: MessageEvent<In>) => {
       post({ id: m.id, type: 'done' });
     } else {
       if (!tts) throw new Error('Voice model not loaded');
+      if (hang) return;
       const out = await tts.generate(m.text, { voice: m.voice, speed: 1 });
       const samples = out.audio instanceof Float32Array ? out.audio : new Float32Array(out.audio);
       post({ id: m.id, type: 'result', samples, sampleRate: out.sampling_rate }, [samples.buffer]);

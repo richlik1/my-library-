@@ -45,6 +45,39 @@ type WorkerReply =
   | { id: number; type: 'result'; samples: Float32Array; sampleRate: number }
   | { id: number; type: 'error'; message: string };
 
+export type VoiceMode = 'threads' | 'single' | 'page';
+
+const MODE_KEY = 'ml-voice-mode';
+const LOAD_STALL_MS = 120_000;
+const SYNTH_BASE_MS = 45_000;
+const SYNTH_PER_CHAR_MS = 600;
+
+function savedMode(): VoiceMode | null {
+  try {
+    const v = localStorage.getItem(MODE_KEY);
+    return v === 'threads' || v === 'single' || v === 'page' ? v : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveMode(m: VoiceMode) {
+  try {
+    localStorage.setItem(MODE_KEY, m);
+  } catch {
+    /* private mode */
+  }
+}
+
+/** Forget a saved fallback (e.g. after an app update that may fix it). */
+export function resetVoiceMode() {
+  try {
+    localStorage.removeItem(MODE_KEY);
+  } catch {
+    /* ignore */
+  }
+}
+
 /** Threads for ONNX Runtime: more than one needs a cross-origin isolated page. */
 export function voiceThreads(): number {
   const isolated = typeof crossOriginIsolated !== 'undefined' && crossOriginIsolated;
@@ -78,36 +111,79 @@ export class KokoroEngine implements NeuralEngine {
     return this.workerReady ? 'worker' : this.tts ? 'page' : 'not loaded';
   }
 
+  /** How the model is running: several cores in the background, one core in the background, or on the page. */
+  mode: VoiceMode | null = null;
+  /** A sentence has been made since the model was (re)loaded. */
+  private warm = false;
+
+  private modes(): VoiceMode[] {
+    const canWorker = !this.opts.inThread && typeof Worker !== 'undefined' && typeof document !== 'undefined' && this.opts.device !== 'cpu';
+    const list: VoiceMode[] = [];
+    if (canWorker && voiceThreads() > 1) list.push('threads');
+    if (canWorker) list.push('single');
+    list.push('page');
+    return list;
+  }
+
   load(onProgress?: LoadProgress): Promise<void> {
     if (this.isLoaded()) return Promise.resolve();
     this.loading ??= (async () => {
-      const canWorker = !this.opts.inThread && typeof Worker !== 'undefined' && typeof document !== 'undefined' && this.opts.device !== 'cpu';
-      if (canWorker) {
-        const threads = voiceThreads();
-        for (const t of threads > 1 ? [threads, 1] : [1]) {
-          try {
-            await this.loadInWorker(onProgress, t);
+      const modes = this.modes();
+      // Start with the way that last worked on this device (a mode that got stuck is skipped from then on).
+      const start = Math.max(0, modes.indexOf(savedMode() ?? modes[0]));
+      let lastError: unknown = null;
+      for (let i = start; i < modes.length; i++) {
+        const m = modes[i];
+        try {
+          if (m === 'page') await this.loadInPage(onProgress);
+          else {
+            const threads = m === 'threads' ? voiceThreads() : 1;
+            await this.loadInWorker(onProgress, threads);
             this.workerReady = true;
-            this.threads = t;
-            onProgress?.(1, 'Voice model ready');
-            return;
-          } catch (e) {
-            this.worker?.terminate();
-            this.worker = null;
-            // Several cores didn't work on this device: try again with one (the model is cached by now).
-            if (t > 1) continue;
-            // A failed download won't work any better on the page; only fall back when the worker itself can't start.
-            if (!(e as Error & { workerStart?: boolean }).workerStart) throw e;
+            this.threads = threads;
+          }
+          this.mode = m;
+          onProgress?.(1, 'Voice model ready');
+          return;
+        } catch (e) {
+          lastError = e;
+          this.stopWorker();
+          if (i + 1 < modes.length) {
+            saveMode(modes[i + 1]);
+            onProgress?.(0, 'Trying a safer way to run the voice…');
           }
         }
       }
-      await this.loadInPage(onProgress);
-      onProgress?.(1, 'Voice model ready');
+      throw lastError;
     })().catch((e) => {
       this.loading = null;
       throw e;
     });
     return this.loading;
+  }
+
+  private stopWorker() {
+    this.worker?.terminate();
+    this.worker = null;
+    this.workerReady = false;
+    for (const p of this.pending.values()) p.reject(new Error('The voice was restarted'));
+    this.pending.clear();
+  }
+
+  /**
+   * The voice stopped responding (seen on some iPhones). Use the next safer
+   * way to run it from now on; the next sentence reloads it that way.
+   */
+  private demote() {
+    const modes = this.modes();
+    const i = this.mode ? modes.indexOf(this.mode) : -1;
+    if (i >= 0 && i + 1 < modes.length) saveMode(modes[i + 1]);
+    if (this.mode !== 'page') {
+      this.warm = false;
+      this.stopWorker();
+      this.loading = null;
+      this.mode = null;
+    }
   }
 
   private modelHost() {
@@ -145,7 +221,20 @@ export class KokoroEngine implements NeuralEngine {
         this.worker = null;
       }
     };
-    return this.call(
+    // If nothing happens for two minutes after the last download progress, treat it as stuck.
+    let stall: ReturnType<typeof setTimeout> | null = null;
+    let rejectStall: (e: Error) => void = () => undefined;
+    const stalled = new Promise<never>((_, rej) => (rejectStall = rej));
+    const arm = () => {
+      if (stall) clearTimeout(stall);
+      stall = setTimeout(() => rejectStall(new Error('The voice model stopped responding while starting')), LOAD_STALL_MS);
+    };
+    arm();
+    const progress: LoadProgress = (f, label) => {
+      arm();
+      onProgress?.(f, label);
+    };
+    const loaded = this.call(
       {
         type: 'load',
         modelId: this.opts.modelId ?? KOKORO_MODEL_ID,
@@ -153,9 +242,12 @@ export class KokoroEngine implements NeuralEngine {
         wasmPaths: new URL('ort/', document.baseURI).href,
         host: this.modelHost(),
         threads,
+        // Tests can make one mode get stuck, to check the fallback.
+        hang: (globalThis as { __MY_LIBRARY_VOICE_HANG__?: string }).__MY_LIBRARY_VOICE_HANG__ === (threads > 1 ? 'threads' : 'single'),
       },
-      onProgress,
+      progress,
     ).then(() => undefined);
+    return Promise.race([loaded, stalled]).finally(() => stall && clearTimeout(stall));
   }
 
   private call(msg: Record<string, unknown>, progress?: LoadProgress): Promise<WorkerReply> {
@@ -196,13 +288,34 @@ export class KokoroEngine implements NeuralEngine {
   synthesize(text: string, voice: string): Promise<SynthResult> {
     const run = async (): Promise<SynthResult> => {
       await this.load();
-      if (this.workerReady) {
-        const r = await this.call({ type: 'synth', text, voice });
-        if (r.type !== 'result') throw new Error('No audio returned');
-        return { samples: r.samples, sampleRate: r.sampleRate };
+      // A sentence normally takes seconds; if there's no answer for much longer, the voice is stuck.
+      const testBase = (globalThis as { __MY_LIBRARY_VOICE_SYNTH_MS__?: number }).__MY_LIBRARY_VOICE_SYNTH_MS__;
+      // The first sentence after loading includes one-time warm-up, so it gets twice as long.
+      const first = !this.warm;
+      const limit = ((testBase ?? SYNTH_BASE_MS) + text.length * SYNTH_PER_CHAR_MS) * (first ? 2 : 1);
+      let timer: ReturnType<typeof setTimeout> | null = null;
+      const timeout = new Promise<never>((_, rej) => {
+        timer = setTimeout(() => {
+          this.demote();
+          rej(new Error('The voice stopped responding; switching to a safer way to run it'));
+        }, limit);
+      });
+      const work = (async (): Promise<SynthResult> => {
+        if (this.workerReady) {
+          const r = await this.call({ type: 'synth', text, voice });
+          if (r.type !== 'result') throw new Error('No audio returned');
+          return { samples: r.samples, sampleRate: r.sampleRate };
+        }
+        const out = await this.tts!.generate(text, { voice, speed: 1 });
+        return { samples: out.audio, sampleRate: out.sampling_rate };
+      })();
+      try {
+        const r = await Promise.race([work, timeout]);
+        this.warm = true;
+        return r;
+      } finally {
+        if (timer) clearTimeout(timer);
       }
-      const out = await this.tts!.generate(text, { voice, speed: 1 });
-      return { samples: out.audio, sampleRate: out.sampling_rate };
     };
     const next = this.chain.then(run, run);
     this.chain = next.catch(() => undefined);

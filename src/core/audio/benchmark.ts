@@ -19,8 +19,19 @@ export async function benchmarkVoice(engine: NeuralEngine, voice: string, onStat
   await engine.load((_f, label) => onStatus?.(label));
   const loadSeconds = wasLoaded ? 0 : (performance.now() - t0) / 1000;
   onStatus?.('Making a test sentence…');
-  // A short warm-up, so the measurement isn't dominated by first-run setup.
-  await engine.synthesize('Hello.', voice);
+  // A short warm-up, so the measurement isn't dominated by first-run setup. If the voice gets
+  // stuck, the engine switches to a safer way of running it; try again that way.
+  for (let attempt = 0; ; attempt++) {
+    try {
+      await engine.synthesize('Hello.', voice);
+      break;
+    } catch (e) {
+      if (attempt >= 2) throw e;
+      onStatus?.('The voice got stuck. Trying a safer way to run it (this can take a minute)…');
+      await engine.load((_f, label) => onStatus?.(label));
+      onStatus?.('Making a test sentence…');
+    }
+  }
   const t1 = performance.now();
   const r = await engine.synthesize(BENCHMARK_TEXT, voice);
   const genSeconds = (performance.now() - t1) / 1000;

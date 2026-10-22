@@ -116,3 +116,31 @@ test('real Kokoro: time from Play to first sound on a long chapter', async ({ pa
   await expect.poll(async () => (await page.locator('.scrub span').first().textContent())?.trim(), { timeout: 9 * 60_000 }).not.toBe('0:00');
   console.log(`Real Kokoro: first sound ${((Date.now() - t0) / 1000).toFixed(1)} s after Play (first use, includes model start) on a 24-sentence chapter`);
 });
+
+test('real Kokoro: if the multi-core voice gets stuck, it switches to one core and still speaks', async ({ page }) => {
+  test.setTimeout(10 * 60_000);
+  await useLocalModel(page);
+  await page.addInitScript(() => {
+    const w = window as unknown as Record<string, unknown>;
+    w.__MY_LIBRARY_VOICE_HANG__ = 'threads';
+    w.__MY_LIBRARY_VOICE_SYNTH_MS__ = 10_000;
+  });
+  await page.goto('./#/settings');
+  await page.evaluate(() => navigator.serviceWorker.ready);
+  await page.reload();
+  await expect.poll(() => page.evaluate(() => crossOriginIsolated)).toBe(true);
+  await page.getByRole('button', { name: 'Test natural voice speed' }).click();
+  const status = page.getByRole('status').filter({ hasText: /listening speed|couldn’t run/ });
+  const seen: string[] = [];
+  const watch = setInterval(async () => {
+    const t = await page.locator('[role=status]').last().textContent().catch(() => '');
+    if (t && seen.at(-1) !== t.replace(/ \(\d+ s\)$/, '')) seen.push(t.replace(/ \(\d+ s\)$/, ''));
+  }, 500);
+  await expect(status).toBeVisible({ timeout: 9 * 60_000 });
+  clearInterval(watch);
+  const text = await status.textContent();
+  console.log(`Stuck-voice steps: ${seen.join(' | ')}; mode=${await page.evaluate(() => localStorage.getItem('ml-voice-mode'))}`);
+  console.log(`Stuck-voice fallback: ${text}`);
+  expect(text).toContain('one processor core, in the background');
+  expect(await page.evaluate(() => localStorage.getItem('ml-voice-mode'))).toBe('single');
+});

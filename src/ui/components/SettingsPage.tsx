@@ -25,16 +25,27 @@ export function SettingsPage() {
   const [say, setSay] = useState('');
   const [bench, setBench] = useState<{ busy: boolean; text: string } | null>(null);
 
+  const [benchSecs, setBenchSecs] = useState(0);
   const runBench = async () => {
     setBench({ busy: true, text: 'Starting…' });
+    const t0 = Date.now();
+    setBenchSecs(0);
+    const tick = setInterval(() => setBenchSecs(Math.round((Date.now() - t0) / 1000)), 1000);
     try {
       const engine = neuralEngine();
       const b = await benchmarkVoice(engine, DEFAULT_KOKORO_VOICE, (label) => setBench({ busy: true, text: label }));
-      const where = (engine as { runsIn?: string }).runsIn === 'worker' ? 'in the background' : 'on the page';
+      const mode = (engine as { mode?: string | null }).mode;
       const threads = (engine as { threads?: number }).threads ?? voiceThreads();
-      setBench({ busy: false, text: `${describeBenchmark(b)} (Runs ${where}, ${threads} processor thread${threads > 1 ? 's' : ''}.)` });
+      const how =
+        mode === 'threads' ? `${threads} processor cores, in the background` : mode === 'single' ? 'one processor core, in the background' : mode === 'page' ? 'one processor core, on the page' : 'the test engine';
+      setBench({ busy: false, text: `${describeBenchmark(b)} (Runs on ${how}.)` });
     } catch (e) {
-      setBench({ busy: false, text: `The natural voice couldn’t start on this device: ${(e as Error).message}` });
+      setBench({
+        busy: false,
+        text: `The natural voice couldn’t run on this device: ${(e as Error).message}. Device voice still works. Please send a screenshot of this.`,
+      });
+    } finally {
+      clearInterval(tick);
     }
   };
   const fileRef = useRef<HTMLInputElement>(null);
@@ -325,6 +336,7 @@ export function SettingsPage() {
         {bench && (
           <p className="small" role="status" style={{ marginBottom: 0 }}>
             {bench.text}
+            {bench.busy && benchSecs > 0 ? ` (${benchSecs} s)` : ''}
           </p>
         )}
       </section>

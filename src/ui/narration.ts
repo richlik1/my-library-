@@ -41,6 +41,9 @@ class AutoKokoro implements NeuralEngine {
   get threads() {
     return this.current.threads;
   }
+  get mode() {
+    return this.current.mode;
+  }
   isLoaded() {
     return this.current.isLoaded();
   }
@@ -72,7 +75,7 @@ class AutoKokoro implements NeuralEngine {
 }
 
 const auto = new AutoKokoro();
-export const kokoroEngine = (): NeuralEngine & { runsIn: string; threads: number } => auto;
+export const kokoroEngine = (): NeuralEngine & { runsIn: string; threads: number; mode: string | null } => auto;
 
 /**
  * Automated tests can install a small deterministic engine (no model download)
