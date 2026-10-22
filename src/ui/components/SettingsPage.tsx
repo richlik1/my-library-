@@ -13,6 +13,7 @@ import { isNativeApp } from '../platform';
 import { benchmarkVoice, describeBenchmark } from '../../core/audio/benchmark';
 import { DEFAULT_KOKORO_VOICE, getVoiceLog, voiceThreads } from '../../core/audio/kokoroEngine';
 import { neuralEngine } from '../narration';
+import { SoundCheck } from './SoundCheck';
 
 export function SettingsPage() {
   const { settings, update } = useSettings();
@@ -102,6 +103,8 @@ export function SettingsPage() {
         </button>
         <h1 style={{ fontSize: 26 }}>Settings</h1>
       </header>
+
+      <SoundCheck />
 
       <section className="card">
         <h3>Backup &amp; restore</h3>
@@ -426,7 +429,7 @@ export function SettingsPage() {
               the new icon.
             </li>
             <li>
-              Turn off Silent mode or raise the volume if you hear nothing (speech follows the ring/silent switch on some iOS versions).
+              If you hear nothing, raise the volume and run the Sound check at the top of Settings. On older iOS versions, Silent mode also mutes the device voice.
             </li>
             <li>
               For much better voices, download free <strong>Enhanced</strong> or <strong>Premium</strong> voices: Settings → Accessibility →

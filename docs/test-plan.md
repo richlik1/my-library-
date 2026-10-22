@@ -47,3 +47,11 @@ Target: ≥95% successful imports on a defined fixture set of supported, readabl
 generated PDFs (single column, two column ×2, headers/footers, hyphenation, outline, page groups, scanned, partly
 scanned, password/corrupt), EPUB (spine/TOC/cover/DRM), DOCX, TXT, Markdown, RTF, HTML — **all passing**. A set of real
 public-domain books (Project Gutenberg EPUB/PDF) should be added in M3, since generated fixtures are cleaner than real files.
+
+## 2.2.1 — “Audio still not working” (owner report)
+
+| Change | Tests | Device verification |
+|---|---|---|
+| Audio Session API set to “playback” (Safari 17+), so Silent mode no longer mutes speech/Web Audio | — (Chromium has no Audio Session API) | **Not tested** — owner’s screenshots show Silent mode on |
+| Settings → Sound check: beep (audio file), device voice, natural voice; copyable results | `e2e/sound.spec.ts` **Passed** | Owner to run |
+| Player offers “Use device voice instead” when natural voice fails | `e2e/sound.spec.ts` **Passed** | Not tested |

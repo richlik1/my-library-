@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState, type CSSProperties } from 'react';
 import type { Chunk } from '../../core/speech/chunker';
 import type { VoiceInfo } from '../../core/speech/engine';
 import { isIOS } from '../../core/speech/webSpeechEngine';
-import { deleteAnnotation, listAnnotations, saveAnnotation, updateChapterText } from '../../core/storage/db';
+import { deleteAnnotation, listAnnotations, saveAnnotation, updateBook, updateChapterText } from '../../core/storage/db';
 import { forgetIndex } from '../../core/search';
 import type { Annotation, HighlightColor } from '../../core/types';
 import { speechEngine } from '../engine';
@@ -335,6 +335,20 @@ function PlayerView({ autoplay, at }: { autoplay: boolean; at?: { chapter: numbe
             <div className="small" style={{ textAlign: 'center', color: 'var(--accent-2)', margin: '2px 0 6px' }} role="status">
               The next chapter is still being made. Keep the app open until it’s ready, or playback stops at the end of this chapter when
               the phone is locked.
+            </div>
+          )}
+          {audioMode && state.waitingForAudio && chapterJob?.status === 'failed' && (
+            <div style={{ textAlign: 'center', margin: '2px 0 8px' }}>
+              <button
+                className="btn"
+                onClick={async () => {
+                  const next = await updateBook(book.id, { narration: { ...book.narration, engine: 'device' } });
+                  if (next) setBook(next);
+                  toast('Switched to the device voice. Press play.');
+                }}
+              >
+                Use device voice instead
+              </button>
             </div>
           )}
           {audioMode && state.waitingForAudio && (

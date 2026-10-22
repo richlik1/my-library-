@@ -111,6 +111,9 @@ export function NarrationPanel({
     <section style={{ marginBottom: 18 }}>
       <PresetPicker book={book} onBookChange={onBookChange} />
       <AmbientPicker />
+      <p className="small muted" style={{ margin: '0 0 12px' }}>
+        No sound? <a href="#/settings">Run the Sound check</a> in Settings.
+      </p>
       <div className="seg-nav" role="radiogroup" aria-label="Narration">
         <a
           href="#"

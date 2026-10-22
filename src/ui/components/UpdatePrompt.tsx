@@ -69,6 +69,10 @@ export function UpdatePrompt() {
     <Sheet title={`What’s new in My Library ${__APP_VERSION__}`} onClose={() => setWhatsNew(false)}>
       <ul className="whats-new">
         <li>
+          <strong>Sound fixes:</strong> sound now plays even with Silent mode on (iOS 17 and later). If you still hear nothing, Settings → Sound check
+          finds where it stops. If the natural voice fails, the player offers the device voice right away.
+        </li>
+        <li>
           <strong>Better text:</strong> two-column PDFs read in the right order, and you can fix any chapter’s text (Chapters → Fix the text of this
           chapter). Highlighting follows each word only when the voice reports words; otherwise it highlights the sentence.
         </li>
