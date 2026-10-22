@@ -69,6 +69,10 @@ export function UpdatePrompt() {
     <Sheet title={`What’s new in My Library ${__APP_VERSION__}`} onClose={() => setWhatsNew(false)}>
       <ul className="whats-new">
         <li>
+          <strong>Faster natural voice:</strong> it now uses several processor cores at once (about twice as fast in testing). The first time you open the
+          app after this update it may need one more restart to switch on.
+        </li>
+        <li>
           <strong>New layout:</strong> Home, Library, Discover and Progress tabs. Your book keeps playing while you browse, with a mini-player at the
           bottom.
         </li>

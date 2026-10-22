@@ -132,3 +132,17 @@ search, context around the current sentence, citations), and each AI-only featur
 | Separate background volume, fade in/out, pause with narration, sleep timer (via narration pause), remembered | Working and tested in Chromium | same |
 | Soundscapes with the iPhone locked, Bluetooth, battery and memory | **Not tested** (needs iPhone). Built on Web Audio, separate from the narration player, so Lock Screen controls stay with the book; iOS may pause the background sound when locked | owner checklist |
 | Café soundscape | Missing: needs a real recording; not added rather than faked | — |
+
+## Voice speed-up (2.1.0)
+
+The service worker (`src/sw.ts`) now adds cross-origin isolation headers, which GitHub Pages can't send, so ONNX Runtime
+can use several threads (`min(4, cores − 1)`). If a device can't run the threaded model, the app retries with one thread
+automatically. Measured here with the real Kokoro model (Chromium, 4-core CPU):
+
+| Setup | Speed (speech made per second of work) | First sound after Play, first use |
+|---|---|---|
+| 1 thread | 0.2–0.3× | 12 s |
+| 3 threads (2.1.0) | **0.5×** | **11 s** |
+
+Not yet measured on iPhone (newer iPhones have 6 cores, so 4 threads). Covered by `e2e/v2.spec.ts` (isolation on, PDF
+import and offline still work) and the opt-in real-model tests.

@@ -51,6 +51,10 @@ test('real Kokoro: speed test in Settings', async ({ page }) => {
   test.setTimeout(10 * 60_000);
   await useLocalModel(page);
   await page.goto('./#/settings');
+  // The service worker adds the headers for multi-core voice from the second load on.
+  await page.evaluate(() => navigator.serviceWorker.ready);
+  await page.reload();
+  await expect.poll(() => page.evaluate(() => crossOriginIsolated)).toBe(true);
   await page.getByRole('button', { name: 'Test natural voice speed' }).click();
   const status = page.getByRole('status').filter({ hasText: /listening speed|couldn’t start/ });
   await expect(status).toBeVisible({ timeout: 9 * 60_000 });
@@ -97,6 +101,8 @@ test('real Kokoro: time from Play to first sound on a long chapter', async ({ pa
   test.setTimeout(10 * 60_000);
   await useLocalModel(page);
   await page.goto('./');
+  await page.evaluate(() => navigator.serviceWorker.ready);
+  await page.reload();
   const para =
     'The lighthouse stood at the edge of the world. Every night its keeper climbed the long stairs to light the lamp, and every morning he climbed down again, tired but content.';
   await page.getByTestId('file-input').setInputFiles({ name: 'long.txt', mimeType: 'text/plain', buffer: Buffer.from(`Chapter 1\n\n${Array(12).fill(para).join('\n\n')}`) });

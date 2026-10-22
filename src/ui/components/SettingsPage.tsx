@@ -31,7 +31,7 @@ export function SettingsPage() {
       const engine = neuralEngine();
       const b = await benchmarkVoice(engine, DEFAULT_KOKORO_VOICE, (label) => setBench({ busy: true, text: label }));
       const where = (engine as { runsIn?: string }).runsIn === 'worker' ? 'in the background' : 'on the page';
-      const threads = voiceThreads();
+      const threads = (engine as { threads?: number }).threads ?? voiceThreads();
       setBench({ busy: false, text: `${describeBenchmark(b)} (Runs ${where}, ${threads} processor thread${threads > 1 ? 's' : ''}.)` });
     } catch (e) {
       setBench({ busy: false, text: `The natural voice couldn’t start on this device: ${(e as Error).message}` });

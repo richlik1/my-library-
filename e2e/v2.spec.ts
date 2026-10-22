@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { speechStub } from './fixtures';
+import { samplePdf, speechStub } from './fixtures';
 
 const spoken = (page: Page) => page.evaluate(() => (window as unknown as { __spoken: string[] }).__spoken);
 const finish = (page: Page) => page.evaluate(() => (window as unknown as { __finish: () => void }).__finish());
@@ -121,4 +121,19 @@ test('after an update, people with books see what’s new once', async ({ page }
   await page.reload();
   await expect(page.getByRole('heading', { name: 'Continue listening' }).or(page.getByRole('heading', { name: 'Recently added' }))).toBeVisible();
   await expect(sheet).toHaveCount(0);
+});
+
+test('with the multi-core headers on, the app, PDF import and offline mode still work', async ({ page, context }) => {
+  await page.goto('./');
+  await page.evaluate(() => navigator.serviceWorker.ready);
+  await page.reload();
+  await expect.poll(() => page.evaluate(() => crossOriginIsolated)).toBe(true);
+  await expect(page.getByText('Your private audiobook shelf')).toBeVisible();
+  await page.getByTestId('file-input').setInputFiles({ name: 'lighthouse.pdf', mimeType: 'application/pdf', buffer: await samplePdf() });
+  await expect(page.getByRole('dialog', { name: 'Book added' })).toBeVisible({ timeout: 30_000 });
+  await page.getByRole('button', { name: 'Save to library' }).click();
+  await context.setOffline(true);
+  await page.reload();
+  await expect(page.getByRole('button', { name: 'Open The Lighthouse Keeper' })).toBeVisible();
+  await context.setOffline(false);
 });

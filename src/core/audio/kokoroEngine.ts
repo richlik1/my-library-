@@ -83,16 +83,22 @@ export class KokoroEngine implements NeuralEngine {
     this.loading ??= (async () => {
       const canWorker = !this.opts.inThread && typeof Worker !== 'undefined' && typeof document !== 'undefined' && this.opts.device !== 'cpu';
       if (canWorker) {
-        try {
-          await this.loadInWorker(onProgress);
-          this.workerReady = true;
-          onProgress?.(1, 'Voice model ready');
-          return;
-        } catch (e) {
-          this.worker?.terminate();
-          this.worker = null;
-          // A failed download won't work any better on the page; only fall back when the worker itself can't start.
-          if (!(e as Error & { workerStart?: boolean }).workerStart) throw e;
+        const threads = voiceThreads();
+        for (const t of threads > 1 ? [threads, 1] : [1]) {
+          try {
+            await this.loadInWorker(onProgress, t);
+            this.workerReady = true;
+            this.threads = t;
+            onProgress?.(1, 'Voice model ready');
+            return;
+          } catch (e) {
+            this.worker?.terminate();
+            this.worker = null;
+            // Several cores didn't work on this device: try again with one (the model is cached by now).
+            if (t > 1) continue;
+            // A failed download won't work any better on the page; only fall back when the worker itself can't start.
+            if (!(e as Error & { workerStart?: boolean }).workerStart) throw e;
+          }
         }
       }
       await this.loadInPage(onProgress);
@@ -108,7 +114,10 @@ export class KokoroEngine implements NeuralEngine {
     return this.opts.modelHost ?? (globalThis as { __MY_LIBRARY_MODEL_HOST__?: string }).__MY_LIBRARY_MODEL_HOST__;
   }
 
-  private loadInWorker(onProgress?: LoadProgress): Promise<void> {
+  /** Processor threads the loaded model uses. */
+  threads = 1;
+
+  private loadInWorker(onProgress?: LoadProgress, threads = 1): Promise<void> {
     let worker: Worker;
     try {
       worker = new Worker(new URL('./kokoroWorker.ts', import.meta.url), { type: 'module' });
@@ -143,7 +152,7 @@ export class KokoroEngine implements NeuralEngine {
         device: this.opts.device === 'webgpu' ? 'webgpu' : 'wasm',
         wasmPaths: new URL('ort/', document.baseURI).href,
         host: this.modelHost(),
-        threads: voiceThreads(),
+        threads,
       },
       onProgress,
     ).then(() => undefined);

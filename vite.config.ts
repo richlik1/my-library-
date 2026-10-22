@@ -31,34 +31,19 @@ export default defineConfig({
           { src: 'icons/icon-maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
         ],
       },
-      workbox: {
+      // Custom service worker (src/sw.ts): precache + cross-origin isolation headers for multi-core voice.
+      strategies: 'injectManifest',
+      srcDir: 'src',
+      filename: 'sw.ts',
+      injectManifest: {
         // Precache the whole app shell (including the PDF.js worker) so the
         // app opens and can import books with no network at all.
         globPatterns: ['**/*.{js,mjs,css,html,png,svg,ico,webmanifest,pdf}'],
         globIgnores: ['pdfjs/**', 'ort/**'],
         maximumFileSizeToCacheInBytes: 8 * 1024 * 1024,
-        navigateFallback: 'index.html',
-        cleanupOutdatedCaches: true,
-        runtimeCaching: [
-          {
-            // CJK character maps / fonts are only needed for some PDFs;
-            // cache them the first time they are used.
-            urlPattern: ({ url }) => url.pathname.includes('/pdfjs/'),
-            handler: 'CacheFirst',
-            options: { cacheName: 'pdfjs-assets', expiration: { maxEntries: 400 } },
-          },
-          {
-            // Natural-voice runtime (21 MB): cached the first time Natural voice is used.
-            urlPattern: ({ url }) => url.pathname.includes('/ort/'),
-            handler: 'CacheFirst',
-            options: { cacheName: 'voice-runtime', expiration: { maxEntries: 4 } },
-          },
-        ],
       },
     }),
   ],
-  // COI=1 serves the preview cross-origin isolated (multi-threaded voice), for benchmarks.
-  preview: process.env.COI ? { headers: { 'Cross-Origin-Opener-Policy': 'same-origin', 'Cross-Origin-Embedder-Policy': 'require-corp' } } : {},
   worker: { format: 'es' },
   build: {
     target: 'es2020',
