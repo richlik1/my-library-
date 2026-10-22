@@ -2,7 +2,9 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { AudioNarrator } from '../../core/audio/audioNarrator';
 import type { PlaybackController } from '../../core/speech/controller';
 import { Narrator, bookPercent, type NarratorState } from '../../core/speech/narrator';
-import { getAudioWav, getChapterAudio, saveProgress, updateBook } from '../../core/storage/db';
+import { addListening, awardXp, getAudioWav, getChapterAudio, saveProgress, updateBook } from '../../core/storage/db';
+import { ListeningTracker, XP_RULES, xpIds } from '../../core/habits';
+import { habitsChanged } from './useHabits';
 import { audioQueue } from '../narration';
 import type { Book, Chapter, Position } from '../../core/types';
 import { isSequenceEngine } from '../../core/speech/engine';
@@ -23,6 +25,8 @@ export function usePlayback(book: Book, chapters: Chapter[], start: Position, vo
   const lastSaved = useRef<string>('');
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const initial = useRef({ start, voiceId, rate: settings.rate, pitch: settings.pitch });
+  const rateRef = useRef(settings.rate);
+  rateRef.current = settings.rate;
 
   const persist = useCallback(
     (s: NarratorState) => {
@@ -31,6 +35,8 @@ export function usePlayback(book: Book, chapters: Chapter[], start: Position, vo
       if (key === lastSaved.current) return;
       lastSaved.current = key;
       const finished = s.status === 'ended';
+      if (finished)
+        void awardXp({ id: xpIds.book(book.id), kind: 'book', amount: XP_RULES.bookCompleted, at: Date.now(), label: `Finished ${book.title}` }).then(habitsChanged);
       saveProgress({
         bookId: book.id,
         ...(finished ? { chapter: 0, offset: 0 } : pos),
@@ -39,7 +45,7 @@ export function usePlayback(book: Book, chapters: Chapter[], start: Position, vo
         finished,
       }).catch(() => undefined);
     },
-    [book.id, chapters],
+    [book.id, book.title, chapters],
   );
 
   // Where we are, so switching between device speech and audio files keeps the place.
@@ -81,8 +87,22 @@ export function usePlayback(book: Book, chapters: Chapter[], start: Position, vo
         : () => undefined;
     setNarrator(n);
     updateBook(book.id, { lastOpenedAt: Date.now() }).catch(() => undefined);
+    // Listening time for goals and XP: measured from real playback only.
+    const tracker = new ListeningTracker((bookId, secs, at) => void addListening(bookId, secs, at).then(habitsChanged, () => undefined));
+    const sample = () => {
+      const s = n.getState();
+      tracker.update({
+        bookId: book.id,
+        playing: s.status === 'playing' && !s.waitingForAudio,
+        mediaTime: n.kind === 'audio' ? s.time : undefined,
+        chapter: s.chapter,
+        rate: rateRef.current,
+      });
+    };
+    const tick = setInterval(sample, 1000);
     const unsub = n.subscribe((s) => {
       setState(s);
+      sample();
       lastPosition.current = { chapter: s.chapter, offset: s.offset };
       // Save at most every 1.5 s while playing, immediately on pause/stop.
       if (s.status !== 'playing') {
@@ -96,7 +116,10 @@ export function usePlayback(book: Book, chapters: Chapter[], start: Position, vo
         }, 1500);
       }
     });
-    const flush = () => persist(n.getState());
+    const flush = () => {
+      persist(n.getState());
+      tracker.flush();
+    };
     const onVisibility = () => {
       if (document.hidden) flush();
       else n.handleVisible();
@@ -104,6 +127,8 @@ export function usePlayback(book: Book, chapters: Chapter[], start: Position, vo
     document.addEventListener('visibilitychange', onVisibility);
     window.addEventListener('pagehide', flush);
     return () => {
+      clearInterval(tick);
+      tracker.update({ bookId: book.id, playing: false, chapter: 0, rate: 1 });
       flush();
       unsub();
       unsubQueue();

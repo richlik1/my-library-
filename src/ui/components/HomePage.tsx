@@ -10,6 +10,9 @@ import { BookDetailsSheet, listeningHours } from './BookDetailsSheet';
 import { Cover } from './Cover';
 import { Icon } from './Icon';
 import { QuickListenSheet } from './QuickListen';
+import { GoalCard } from './Goal';
+import { useHabits } from '../hooks/useHabits';
+import { useSettings } from '../hooks/settings';
 import { useImporter } from './useImporter';
 
 const isStandalone = () =>
@@ -38,6 +41,8 @@ function greeting() {
 /** Home: pick up where you left off, see what's new, add a book. */
 export function HomePage() {
   const pb = usePlaybackSession();
+  const { settings } = useSettings();
+  const habits = useHabits();
   const [books, setBooks] = useState<Book[] | null>(null);
   const [progress, setProgress] = useState<Map<string, Progress>>(new Map());
   const [editing, setEditing] = useState<{ book: Book; isNew: boolean } | null>(null);
@@ -211,6 +216,8 @@ export function HomePage() {
               )}
             </section>
           )}
+
+          {settings.habits && habits && <GoalCard habits={habits} goal={settings.dailyGoalMinutes} showStreak={settings.streaks} />}
 
           <section aria-labelledby="quick-h" className="card quick-card">
             <div className="quick-icon" aria-hidden="true">

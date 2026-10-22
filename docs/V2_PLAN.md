@@ -89,3 +89,23 @@ achievements, quote collection. **Phase 3** — local AI evaluation, retrieval w
 | Recommendations explainable and can be turned off | Working and tested | `tests/recommend.test.ts`, `e2e/v2.spec.ts` |
 
 Not done in Phase 1 (by design): goals, streaks, XP, achievements (Phase 2); AI features (Phase 3).
+
+## Phase 2 results (2026-10-22)
+
+| Acceptance criterion | Status | Evidence |
+|---|---|---|
+| Daily goals reflect real listening (not paused, not generating, no throttled background timers) | Working and tested | `tests/habits.test.ts` (tracker: speed, locked-phone jump, skips, pauses, late timers), `e2e/habits.spec.ts` (3.5 s played → 2–5 s saved; pause adds nothing) |
+| Goal options 5/10/15/20/30/custom; Home shows “12 of 20 minutes completed.” / “You finished your reading goal today.” | Working and tested | `e2e/habits.spec.ts` |
+| Weekly consistency, monthly total, optional forgiving streak (one rest day a week) | Working and tested | `tests/habits.test.ts` |
+| XP survives restarts; ledger is auditable (Progress → How XP is earned) | Working and tested | XP stored in IndexedDB `xp` store; reload in e2e |
+| Rewards can’t be duplicated | Working and tested | dedup ids (`book:<id>`, `quiz:<id>`, `review:<date>`, `listen:<date>` updated not added) |
+| Levels from a formula (60 × (level−1)^1.6), named for 1–5, unlimited after | Working and tested | `tests/habits.test.ts` |
+| Achievements: First Book, First Hour, Five-Day Habit, First Completed, Ten Completed, Knowledge Collector | Working and tested | unit + e2e |
+| Quote references point to the source; open in book jumps to the passage | Working and tested | `e2e/habits.spec.ts` |
+| Save while listening (Save = “Save Lesson”) without interrupting narration | Working and tested | `e2e/habits.spec.ts` |
+| Quotes: search, filter by book/tag, favorites, notes, tags, export (Markdown), quote card, limited-excerpt sharing with confirmation | Working and tested (share sheet itself not testable here) | `e2e/habits.spec.ts` |
+| All progress works offline | Working and tested (all local IndexedDB; included in backups) | — |
+| Gamification optional | Working and tested (switch on Progress) | `e2e/habits.spec.ts` |
+| Page references for PDFs | Missing: quotes show chapter only; page positions aren’t kept at import | — |
+
+“Explain This” and “Apply It” while listening need a local AI model: Phase 3.

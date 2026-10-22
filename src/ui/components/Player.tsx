@@ -17,7 +17,7 @@ import { Icon } from './Icon';
 import { AnnotationsSheet, COLORS, ChaptersSheet, NoteSheet, SleepSheet, VoiceSheet, swatch } from './PlayerSheets';
 import { Reader, type TextRange } from './Reader';
 
-export function Player({ id, autoplay }: { id: string; autoplay: boolean }) {
+export function Player({ id, autoplay, at }: { id: string; autoplay: boolean; at?: { chapter: number; offset: number } }) {
   const pb = usePlaybackSession();
   const [missing, setMissing] = useState(false);
   const { loaded } = useSettings();
@@ -49,7 +49,7 @@ export function Player({ id, autoplay }: { id: string; autoplay: boolean }) {
         <div className="spinner" />
       </div>
     );
-  return <PlayerView key={id} autoplay={autoplay} />;
+  return <PlayerView key={id} autoplay={autoplay} at={at} />;
 }
 
 type Popover = { kind: 'chunk'; chunk: Chunk; rect: DOMRect } | { kind: 'selection'; range: TextRange; rect: DOMRect } | null;
@@ -63,7 +63,7 @@ function fmt(sec: number) {
   return h ? `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}` : `${m}:${String(s).padStart(2, '0')}`;
 }
 
-function PlayerView({ autoplay }: { autoplay: boolean }) {
+function PlayerView({ autoplay, at }: { autoplay: boolean; at?: { chapter: number; offset: number } }) {
   const { settings, update } = useSettings();
   const toast = useToast();
   const pb = usePlaybackSession();
@@ -90,6 +90,15 @@ function PlayerView({ autoplay }: { autoplay: boolean }) {
       return isIOS() && !isNativeApp();
     }
   });
+
+  // Opened from a quote: go to that passage (without starting playback).
+  useEffect(() => {
+    if (narrator && at && at.chapter < chapters.length) {
+      narrator.seek(at, narrator.getState().status === 'playing');
+      history.replaceState(null, '', `#/book/${book.id}`);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [narrator]);
 
   // Autoplay from the "resume" button on the library screen.
   useEffect(() => {
@@ -131,6 +140,22 @@ function PlayerView({ autoplay }: { autoplay: boolean }) {
     (a) => a.kind === 'bookmark' && a.chapter === state.chapter && currentChunk && a.start >= currentChunk.start && a.start < currentChunk.end,
   );
   const notice = state.notice && state.notice !== dismissedNotice ? state.notice : null;
+  const lessonHere = annotations.find(
+    (a) => a.kind !== 'bookmark' && a.chapter === state.chapter && currentChunk && a.start <= currentChunk.start && a.end >= currentChunk.end,
+  );
+
+  // Keeps the sentence being heard in your quotes, tagged as a lesson. Narration isn't interrupted.
+  const saveLesson = async () => {
+    if (!currentChunk) return;
+    if (lessonHere) {
+      if (!lessonHere.tags?.includes('lesson')) await saveAnnotation({ ...lessonHere, tags: [...(lessonHere.tags ?? []), 'lesson'] });
+      toast('Already in your quotes');
+    } else {
+      await saveAnnotation({ bookId: book.id, kind: 'highlight', chapter: state.chapter, start: currentChunk.start, end: currentChunk.end, quote: currentChunk.text, color: 'gold', tags: ['lesson'] });
+      toast('Saved to your quotes as a lesson');
+    }
+    refreshAnnotations();
+  };
 
   const addHighlight = async (range: TextRange, color: HighlightColor) => {
     await saveAnnotation({ bookId: book.id, kind: 'highlight', chapter: state.chapter, start: range.start, end: range.end, quote: range.quote, color });
@@ -389,6 +414,10 @@ function PlayerView({ autoplay }: { autoplay: boolean }) {
             <button className="tool" onClick={() => setSheet('chapters')}>
               <Icon name="list" size={20} />
               Chapters
+            </button>
+            <button className={`tool ${lessonHere ? 'active' : ''}`} onClick={saveLesson} aria-label="Save this sentence as a lesson">
+              <Icon name="highlight" size={20} />
+              Save
             </button>
             <button className={`tool ${bookmarkHere ? 'active' : ''}`} onClick={() => toggleBookmark()}>
               <Icon name="bookmark" size={20} />

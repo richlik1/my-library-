@@ -82,6 +82,10 @@ export interface Annotation {
   quote: string;
   note?: string;
   color?: HighlightColor;
+  /** Quote collection: your tags, favourite, and when you last reviewed it. */
+  tags?: string[];
+  favorite?: boolean;
+  reviewedAt?: number;
   createdAt: number;
   updatedAt: number;
 }
@@ -125,6 +129,12 @@ export interface Settings {
   theme: 'system' | 'dark' | 'light';
   /** Discover suggests books from your own listening history. */
   personalizedDiscover: boolean;
+  /** Daily goals, XP, levels and achievements. Turn off for a plain player. */
+  habits: boolean;
+  /** Show the listening streak (forgiving: one rest day a week). */
+  streaks: boolean;
+  /** Daily listening goal in minutes. */
+  dailyGoalMinutes: number;
   /** Bumped when new default categories are added, so existing lists get them once. */
   categoriesVersion?: number;
 }
@@ -154,6 +164,9 @@ export const DEFAULT_SETTINGS: Settings = {
   presets: [],
   theme: 'system',
   personalizedDiscover: true,
+  habits: true,
+  streaks: true,
+  dailyGoalMinutes: 15,
   showNoveltyVoices: false,
   categories: DEFAULT_CATEGORIES,
 };

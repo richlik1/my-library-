@@ -5,6 +5,7 @@ import { DEFAULT_SETTINGS } from '../types';
 import type { DailyBlock, GrowthBookState, GrowthNote, WeeklyReview } from '../../growth/types';
 import type { ChapterAudio } from '../audio/types';
 import type { Summary } from '../summaries';
+import { XP_RULES, localDate, xpIds, type ListeningDay, type XpEvent } from '../habits';
 import { concatWavs } from '../audio/wav';
 
 /**
@@ -29,6 +30,9 @@ interface LibraryDB extends DBSchema {
   audioData: { key: string; value: { key: string; wav: ArrayBuffer } };
   // Quick Listen summaries (schema v4).
   summaries: { key: string; value: Summary; indexes: { byBook: string } };
+  // Reading habits (schema v5): listening time per day and the XP ledger.
+  listening: { key: string; value: ListeningDay };
+  xp: { key: string; value: XpEvent };
 }
 
 export const GROWTH_STORES = ['growthBooks', 'growthNotes', 'growthDays', 'growthReviews'] as const;
@@ -38,7 +42,7 @@ let dbPromise: Promise<IDBPDatabase<LibraryDB>> | null = null;
 
 export function db(): Promise<IDBPDatabase<LibraryDB>> {
   if (!dbPromise) {
-    dbPromise = openDB<LibraryDB>(DB_NAME, 4, {
+    dbPromise = openDB<LibraryDB>(DB_NAME, 5, {
       upgrade(d, oldVersion) {
         if (oldVersion < 1) {
           d.createObjectStore('books', { keyPath: 'id' });
@@ -60,6 +64,10 @@ export function db(): Promise<IDBPDatabase<LibraryDB>> {
           d.createObjectStore('growthReviews', { keyPath: 'week' });
         }
         if (oldVersion < 4) d.createObjectStore('summaries', { keyPath: 'id' }).createIndex('byBook', 'bookId');
+        if (oldVersion < 5) {
+          d.createObjectStore('listening', { keyPath: 'date' });
+          d.createObjectStore('xp', { keyPath: 'id' });
+        }
       },
       blocking() {
         // Another tab upgraded the schema: close so it can proceed.
@@ -312,4 +320,57 @@ export async function deleteBookSummaries(bookId: string) {
 
 export async function listAllAnnotations() {
   return (await db()).getAll('annotations');
+}
+
+// ---- Reading habits ------------------------------------------------------------
+
+/** Adds measured listening time to its day, and updates that day's listening XP (1 per full minute). */
+export async function addListening(bookId: string, seconds: number, at = Date.now()) {
+  const date = localDate(at);
+  const d = await db();
+  const tx = d.transaction(['listening', 'xp'], 'readwrite');
+  const day = (await tx.objectStore('listening').get(date)) ?? { date, seconds: 0, byBook: {} };
+  day.seconds += seconds;
+  day.byBook[bookId] = (day.byBook[bookId] ?? 0) + seconds;
+  await tx.objectStore('listening').put(day);
+  const minutes = Math.floor(day.seconds / 60);
+  if (minutes > 0)
+    await tx.objectStore('xp').put({
+      id: xpIds.listening(date),
+      kind: 'listening',
+      amount: minutes * XP_RULES.perListeningMinute,
+      at,
+      label: `Listened ${minutes} min on ${date}`,
+    });
+  await tx.done;
+}
+
+export async function listListening(): Promise<ListeningDay[]> {
+  return (await db()).getAll('listening');
+}
+
+/** Records an XP event once: the same id (same quiz, same book, same day) never counts twice. Returns true if new. */
+export async function awardXp(e: XpEvent): Promise<boolean> {
+  const d = await db();
+  const tx = d.transaction('xp', 'readwrite');
+  if (await tx.store.get(e.id)) {
+    await tx.done;
+    return false;
+  }
+  await tx.store.put(e);
+  await tx.done;
+  return true;
+}
+
+export async function listXp(): Promise<XpEvent[]> {
+  return (await (await db()).getAll('xp')).sort((a, b) => b.at - a.at);
+}
+
+/** When each achievement was first seen as earned. */
+export async function getAchievementDates(): Promise<Record<string, number>> {
+  return ((await (await db()).get('kv', 'achievements')) as Record<string, number> | undefined) ?? {};
+}
+
+export async function setAchievementDates(v: Record<string, number>) {
+  await (await db()).put('kv', v, 'achievements');
 }

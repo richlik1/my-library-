@@ -6,6 +6,9 @@ import { deleteNote, saveNote, updateState } from '../../growth/store';
 import type { CatalogBook, GrowthBookState, GrowthNote, ReadingStatus } from '../../growth/types';
 import { Cover } from '../components/Cover';
 import { Icon } from '../components/Icon';
+import { awardXp } from '../../core/storage/db';
+import { XP_RULES, xpIds } from '../../core/habits';
+import { habitsChanged } from '../hooks/useHabits';
 import { useToast } from '../hooks/toast';
 import { navigate } from '../hooks/useRoute';
 import { useGrowth, type GrowthData } from './useGrowth';
@@ -103,7 +106,10 @@ export function GrowthBook({ id }: { id: string }) {
       )}
       {tab === 'apply' && <Apply book={book} g={g} />}
       {tab === 'exercises' && <Exercises book={book} state={state} onToggle={(done) => set({ exercisesDone: done })} />}
-      {tab === 'quiz' && <Quiz key={book.id} book={book} state={state} onScore={(score) => set({ quizAttempts: (state?.quizAttempts ?? 0) + 1, quizBest: Math.max(score, state?.quizBest ?? 0) })} />}
+      {tab === 'quiz' && <Quiz key={book.id} book={book} state={state} onScore={(score) => {
+            set({ quizAttempts: (state?.quizAttempts ?? 0) + 1, quizBest: Math.max(score, state?.quizBest ?? 0) });
+            void awardXp({ id: xpIds.quiz(book.id), kind: 'quiz', amount: XP_RULES.quiz, at: Date.now(), label: `Completed the ${book.title} quiz` }).then(habitsChanged);
+          }} />}
       {tab === 'notes' && <BookNotes book={book} g={g} />}
     </div>
   );

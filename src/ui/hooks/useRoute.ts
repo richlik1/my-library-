@@ -5,7 +5,8 @@ export type Route =
   | { name: 'library' }
   | { name: 'discover' }
   | { name: 'progress' }
-  | { name: 'book'; id: string; autoplay: boolean }
+  | { name: 'book'; id: string; autoplay: boolean; at?: { chapter: number; offset: number } }
+  | { name: 'quotes' }
   | { name: 'settings' }
   | { name: 'growth' }
   | { name: 'growth-book'; id: string }
@@ -17,7 +18,17 @@ export type Route =
 function parse(hash: string): Route {
   const [path, query = ''] = hash.replace(/^#\/?/, '').split('?');
   const [first, second] = path.split('/');
-  if (first === 'book' && second) return { name: 'book', id: decodeURIComponent(second), autoplay: query.split('&').includes('play') };
+  if (first === 'book' && second) {
+    const params = query.split('&');
+    const at = params.find((p) => p.startsWith('at='))?.slice(3).split('.').map(Number);
+    return {
+      name: 'book',
+      id: decodeURIComponent(second),
+      autoplay: params.includes('play'),
+      ...(at && at.length === 2 && at.every(Number.isFinite) ? { at: { chapter: at[0], offset: at[1] } } : {}),
+    };
+  }
+  if (first === 'quotes') return { name: 'quotes' };
   if (first === 'settings') return { name: 'settings' };
   if (first === 'library') return { name: 'library' };
   if (first === 'discover') return { name: 'discover' };

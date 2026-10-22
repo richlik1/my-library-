@@ -2,6 +2,8 @@ import type { BusinessProfile, DailyBlock, GrowthBookState, GrowthNote, WeeklyRe
 import type { Annotation, Book, BookContent, Progress, Settings } from '../types';
 import { DEFAULT_SETTINGS } from '../types';
 import { GROWTH_STORES, db } from './db';
+import type { ListeningDay, XpEvent } from '../habits';
+import type { Summary } from '../summaries';
 
 export const BACKUP_FORMAT = 'my-library-backup';
 /** v2 added the Growth Library. v1 backups still restore. */
@@ -31,6 +33,8 @@ export interface Backup {
     reviews: WeeklyReview[];
     profile?: BusinessProfile;
   };
+  /** Listening time, XP ledger and Quick Listen summaries (V2). */
+  habits?: { listening: ListeningDay[]; xp: XpEvent[]; summaries: Summary[] };
 }
 
 export interface ImportSummary {
@@ -66,6 +70,7 @@ export async function createBackup(includeOriginalFiles: boolean): Promise<Backu
     d.getAll('growthReviews'),
     d.get('kv', 'growthProfile') as Promise<BusinessProfile | undefined>,
   ]);
+  const [listening, xp, summaries] = await Promise.all([d.getAll('listening'), d.getAll('xp'), d.getAll('summaries')]);
   const [books, contents, progress, annotations, settings] = await Promise.all([
     d.getAll('books'),
     d.getAll('contents'),
@@ -90,6 +95,7 @@ export async function createBackup(includeOriginalFiles: boolean): Promise<Backu
     settings: { ...DEFAULT_SETTINGS, ...(settings ?? {}) },
     files,
     growth: { books: gBooks, notes: gNotes, days: gDays, reviews: gReviews, ...(gProfile ? { profile: gProfile } : {}) },
+    habits: { listening, xp, summaries },
   };
 }
 
@@ -118,7 +124,7 @@ export async function restoreBackup(backup: Backup, opts: { restoreSettings?: bo
   const summary: ImportSummary = { books: 0, skippedBooks: 0, annotations: 0, progress: 0, growth: 0 };
   const contents = new Map(backup.contents.map((c) => [c.bookId, c]));
   const files = new Map((backup.files ?? []).map((f) => [f.bookId, f]));
-  const tx = d.transaction(['books', 'contents', 'files', 'progress', 'annotations', 'kv', ...GROWTH_STORES], 'readwrite');
+  const tx = d.transaction(['books', 'contents', 'files', 'progress', 'annotations', 'kv', 'listening', 'xp', 'summaries', ...GROWTH_STORES], 'readwrite');
 
   for (const book of backup.books) {
     const content = contents.get(book.id);
@@ -184,6 +190,20 @@ export async function restoreBackup(backup: Backup, opts: { restoreSettings?: bo
       }
     }
     if (opts.restoreSettings && g.profile) await tx.objectStore('kv').put(g.profile, 'growthProfile');
+  }
+
+  // Habits: keep the larger listening total per day; add XP and summaries that aren't here yet.
+  const h = backup.habits;
+  if (h) {
+    for (const day of h.listening ?? []) {
+      const cur = await tx.objectStore('listening').get(day.date);
+      if (!cur || cur.seconds < day.seconds) await tx.objectStore('listening').put(day);
+    }
+    for (const e of h.xp ?? []) {
+      const cur = await tx.objectStore('xp').get(e.id);
+      if (!cur || cur.amount < e.amount) await tx.objectStore('xp').put(e);
+    }
+    for (const s of h.summaries ?? []) if (!(await tx.objectStore('summaries').get(s.id))) await tx.objectStore('summaries').put(s);
   }
   await tx.done;
   return summary;
