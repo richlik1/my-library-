@@ -310,6 +310,12 @@ input[type='range']::-moz-range-thumb {
   margin: 0;
   flex: 1;
 }
+@media (max-width: 420px) {
+  .topbar h1 {
+    font-size: 26px;
+    white-space: nowrap;
+  }
+}
 .topbar h1 em {
   font-style: normal;
   color: var(--accent);

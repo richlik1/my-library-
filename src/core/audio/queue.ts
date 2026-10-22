@@ -1,6 +1,6 @@
 import type { ChapterAudio, NeuralEngine } from './types';
 import { audioKey } from './types';
-import { ChunkGenerationError, generateChapterAudio } from './generate';
+import { ChunkGenerationError, generateChapterAudio, type GenerateOptions } from './generate';
 import { textHash } from './timing';
 
 export type JobStatus = 'queued' | 'generating' | 'done' | 'failed' | 'cancelled';
@@ -20,7 +20,8 @@ export interface QueueDeps {
   engine(): NeuralEngine;
   chapterText(bookId: string, chapter: number): Promise<string | undefined>;
   voiceFor(bookId: string): Promise<string>;
-  pronunciations?(): Promise<Record<string, string> | undefined>;
+  /** Pauses and pronunciations to use; changing them makes chapters regenerate when requested. */
+  options?(): Promise<Pick<GenerateOptions, 'sentencePause' | 'paragraphPause' | 'pronunciations'>>;
   getAudioMeta(key: string): Promise<Omit<ChapterAudio, 'wav'> | undefined>;
   putAudio(a: ChapterAudio): Promise<void>;
 }
@@ -134,7 +135,9 @@ export class AudioQueue {
     }
     const engine = this.deps.engine();
     const voice = await this.deps.voiceFor(bookId);
-    const hash = textHash(text);
+    const extra = (await this.deps.options?.()) ?? {};
+    // The cache key covers the text and the narration settings that change the audio.
+    const hash = textHash(`${text}\u0000${JSON.stringify(extra)}`);
     const key = audioKey(bookId, chapter);
     const cached = await this.deps.getAudioMeta(key);
     if (cached && cached.voice === voice && cached.engine === engine.id && cached.textHash === hash) {
@@ -153,7 +156,7 @@ export class AudioQueue {
       const result = await generateChapterAudio(engine, text, {
         voice,
         signal: this.controller.signal,
-        pronunciations: await this.deps.pronunciations?.(),
+        ...extra,
         onProgress: (done, total) => {
           job.progress = done / total;
           this.emit();

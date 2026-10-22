@@ -1,7 +1,7 @@
 import { KokoroEngine, DEFAULT_KOKORO_VOICE } from '../core/audio/kokoroEngine';
 import { AudioQueue } from '../core/audio/queue';
 import type { NeuralEngine } from '../core/audio/types';
-import { getAudioMeta, getBook, getContent, putAudio } from '../core/storage/db';
+import { getAudioMeta, getBook, getContent, getSettings, putAudio } from '../core/storage/db';
 
 const DEVICE_KEY = 'ml-kokoro-device';
 
@@ -43,4 +43,10 @@ export const audioQueue = new AudioQueue({
   voiceFor: async (bookId) => (await getBook(bookId))?.narration?.voice ?? DEFAULT_KOKORO_VOICE,
   getAudioMeta,
   putAudio,
+  options: async () => {
+    const s = await getSettings();
+    const pauses = { short: [0.1, 0.35], normal: [0.18, 0.55], long: [0.3, 0.9] }[s.narrationPause] ?? [0.18, 0.55];
+    const pronunciations = Object.fromEntries(s.pronunciations.filter((p) => p.word.trim() && p.say.trim()).map((p) => [p.word.trim(), p.say.trim()]));
+    return { sentencePause: pauses[0], paragraphPause: pauses[1], ...(Object.keys(pronunciations).length ? { pronunciations } : {}) };
+  },
 });

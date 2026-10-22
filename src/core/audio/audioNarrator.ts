@@ -273,8 +273,10 @@ export class AudioNarrator implements PlaybackController {
       this.audio.playbackRate = this.rate;
       this.audio.currentTime = this.pendingSeekTime;
       this.set({ waitingForAudio: false, duration: meta.duration, time: this.pendingSeekTime });
-      // Generate ahead so the next chapter is ready when this one ends.
-      if (chapter + 1 < this.deps.chapters.length) this.deps.requestAudio([chapter + 1]);
+      // Generate two chapters ahead: generation pauses while the phone is locked, so the
+      // next chapter must already exist for playback to continue on the Lock Screen.
+      const ahead = [chapter + 1, chapter + 2].filter((c) => c < this.deps.chapters.length);
+      if (ahead.length) this.deps.requestAudio(ahead);
       return true;
     };
     const p = (this.loading ?? Promise.resolve(false)).then(run, run);

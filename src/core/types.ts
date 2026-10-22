@@ -101,6 +101,10 @@ export interface Settings {
   /** Show novelty voices (Bells, Bubbles, Zarvox…) in the voice list. */
   showNoveltyVoices: boolean;
   categories: string[];
+  /** Natural voice: pause length between sentences/paragraphs. */
+  narrationPause: 'short' | 'normal' | 'long';
+  /** Natural voice: words to say differently, e.g. { word: 'StayOps', say: 'Stay Ops' }. */
+  pronunciations: Array<{ word: string; say: string }>;
   /** Bumped when new default categories are added, so existing lists get them once. */
   categoriesVersion?: number;
 }
@@ -125,6 +129,8 @@ export const DEFAULT_SETTINGS: Settings = {
   followAlong: true,
   fontSize: 19,
   keepAwake: true,
+  narrationPause: 'normal',
+  pronunciations: [],
   showNoveltyVoices: false,
   categories: DEFAULT_CATEGORIES,
 };

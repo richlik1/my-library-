@@ -13,7 +13,8 @@ import { usePlayback } from '../hooks/usePlayback';
 import { goBack, navigate } from '../hooks/useRoute';
 import { pickDefaultVoice, useVoices } from '../hooks/useVoices';
 import { BookDetailsSheet } from './BookDetailsSheet';
-import { NarrationPanel, useAudioJobs } from './NarrationPanel';
+import { NarrationPanel, useAudioJobs, useReadyChapters } from './NarrationPanel';
+import { DEFAULT_KOKORO_VOICE, KOKORO_VOICES } from '../../core/audio/kokoroEngine';
 import { Icon } from './Icon';
 import { AnnotationsSheet, COLORS, ChaptersSheet, NoteSheet, SleepSheet, VoiceSheet, swatch } from './PlayerSheets';
 import { Reader, type TextRange } from './Reader';
@@ -96,6 +97,8 @@ function PlayerView({ data, autoplay }: { data: Loaded; autoplay: boolean }) {
   const mode = book.narration?.engine ?? 'device';
   const { narrator, state } = usePlayback(book, chapters, data.start, voiceId, mode);
   const jobs = useAudioJobs(book.id);
+  const kokoroVoice = book.narration?.voice ?? DEFAULT_KOKORO_VOICE;
+  const readyChapters = useReadyChapters(book.id, kokoroVoice, jobs);
   const [annotations, setAnnotations] = useState<Annotation[]>(data.annotations);
   const [popover, setPopover] = useState<Popover>(null);
   const [sheet, setSheet] = useState<SheetName>(null);
@@ -318,6 +321,12 @@ function PlayerView({ data, autoplay }: { data: Loaded; autoplay: boolean }) {
           </div>
         )}
         <div className="dock-inner">
+          {audioMode && playing && !state.waitingForAudio && state.chapter + 1 < chapters.length && !readyChapters.has(state.chapter + 1) && (
+            <div className="small" style={{ textAlign: 'center', color: 'var(--accent-2)', margin: '2px 0 6px' }} role="status">
+              The next chapter is still being made. Keep the app open until it’s ready, or playback stops at the end of this chapter when
+              the phone is locked.
+            </div>
+          )}
           {audioMode && state.waitingForAudio && (
             <div className="small" style={{ textAlign: 'center', color: 'var(--text-2)', margin: '2px 0 6px' }} role="status">
               {chapterJob?.status === 'failed'
@@ -393,9 +402,11 @@ function PlayerView({ data, autoplay }: { data: Loaded; autoplay: boolean }) {
             </button>
           </div>
           <div className="dock-tools">
-            <button className="tool" onClick={() => setSheet('voice')}>
+            <button className="tool" onClick={() => setSheet('voice')} aria-label="Voice and speed">
               <Icon name="speed" size={20} />
-              <span className="val">{settings.rate.toFixed(2).replace(/\.?0+$/, '')}× · Voice</span>
+              <span className="val">
+                {settings.rate.toFixed(2).replace(/\.?0+$/, '')}× · {audioMode ? (KOKORO_VOICES.find((v) => v.id === kokoroVoice)?.name ?? 'Voice') : 'Voice'}
+              </span>
             </button>
             <button className="tool" onClick={() => setSheet('chapters')}>
               <Icon name="list" size={20} />

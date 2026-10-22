@@ -164,6 +164,22 @@ describe('generation queue and audio cache', () => {
     expect((await getAudioMeta(audioKey('b1', 0)))!.voice).toBe('v2');
   });
 
+  it('regenerates when narration settings (pauses, pronunciations) change', async () => {
+    const engine = new FakeEngine();
+    let opts: { sentencePause?: number } = { sentencePause: 0.2 };
+    const q = new AudioQueue({ ...deps(engine, [TEXT]), options: async () => opts });
+    q.enqueue('b1', [0]);
+    await q.idle();
+    const first = engine.calls.length;
+    q.enqueue('b1', [0]);
+    await q.idle();
+    expect(engine.calls.length).toBe(first); // same settings: reused
+    opts = { sentencePause: 0.5 };
+    q.enqueue('b1', [0]);
+    await q.idle();
+    expect(engine.calls.length).toBeGreaterThan(first);
+  });
+
   it('marks a chapter failed with a reason and lets it be retried', async () => {
     const engine = new FakeEngine();
     const first = chunkText(TEXT)[0].text;

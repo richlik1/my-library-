@@ -2,7 +2,9 @@ import { useEffect, useRef, useState } from 'react';
 import { DEFAULT_KOKORO_VOICE, KOKORO_VOICES } from '../../core/audio/kokoroEngine';
 import type { Job } from '../../core/audio/queue';
 import { encodeWav } from '../../core/audio/wav';
-import { audioCacheBytes, deleteBookAudio, listBookAudio, updateBook } from '../../core/storage/db';
+import { audioCacheBytes, deleteBookAudio, deleteChapterAudio, getAudioWav, listBookAudio, updateBook } from '../../core/storage/db';
+import { audioKey } from '../../core/audio/types';
+import { downloadBlob, safeName } from './PlayerSheets';
 import type { Book, Chapter } from '../../core/types';
 import { useToast } from '../hooks/toast';
 import { hasWebGPU } from '../../core/audio/kokoroEngine';
@@ -22,6 +24,20 @@ export function useAudioJobs(bookId: string): Job[] {
   return jobs;
 }
 
+/** Chapters of a book whose audio is ready in the given voice; refreshes as generation finishes. */
+export function useReadyChapters(bookId: string, voice: string, jobs: Job[]): Set<number> {
+  const [ready, setReady] = useState<Set<number>>(new Set());
+  const doneCount = jobs.filter((j) => j.status === 'done').length;
+  useEffect(() => {
+    let alive = true;
+    void listBookAudio(bookId).then((list) => alive && setReady(new Set(list.filter((a) => a.voice === voice).map((a) => a.chapter))));
+    return () => {
+      alive = false;
+    };
+  }, [bookId, voice, doneCount]);
+  return ready;
+}
+
 export function NarrationPanel({
   book,
   chapters,
@@ -37,7 +53,7 @@ export function NarrationPanel({
   const jobs = useAudioJobs(book.id);
   const mode = book.narration?.engine ?? 'device';
   const voice = book.narration?.voice ?? DEFAULT_KOKORO_VOICE;
-  const [ready, setReady] = useState<Set<number>>(new Set());
+  const ready = useReadyChapters(book.id, voice, jobs);
   const [usage, setUsage] = useState(0);
   const [preview, setPreview] = useState<{ voice: string; label: string } | null>(null);
   const previewAudio = useRef<HTMLAudioElement | null>(null);
@@ -47,14 +63,11 @@ export function NarrationPanel({
     void hasWebGPU().then(setGpuAvailable);
   }, []);
 
-  const refresh = async () => {
-    const list = await listBookAudio(book.id);
-    setReady(new Set(list.filter((a) => a.voice === voice).map((a) => a.chapter)));
-    setUsage(await audioCacheBytes());
-  };
+  const [deleted, setDeleted] = useState(0);
+  const refresh = async () => setUsage(await audioCacheBytes());
   useEffect(() => {
     void refresh();
-  }, [book.id, voice, jobs.filter((j) => j.status === 'done').length]);
+  }, [book.id, voice, jobs.filter((j) => j.status === 'done').length, deleted]);
 
   const setNarration = async (patch: Partial<NonNullable<Book['narration']>>) => {
     const narration = { engine: mode, voice, ...patch };
@@ -168,6 +181,33 @@ export function NarrationPanel({
             <button className="btn" onClick={() => audioQueue.enqueue(book.id, chapters.map((_, i) => i))}>
               Generate whole book
             </button>
+            {ready.has(currentChapter) && (
+              <>
+                <button
+                  className="btn"
+                  onClick={async () => {
+                    await deleteChapterAudio(audioKey(book.id, currentChapter));
+                    audioQueue.clearFinished();
+                    audioQueue.enqueue(book.id, [currentChapter]);
+                    audioQueue.prioritize(book.id, currentChapter);
+                    toast('Making this chapter again');
+                  }}
+                >
+                  Regenerate this chapter
+                </button>
+                <button
+                  className="btn"
+                  onClick={async () => {
+                    const wav = await getAudioWav(audioKey(book.id, currentChapter));
+                    if (!wav) return;
+                    const name = `${safeName(book.title)} - ${String(currentChapter + 1).padStart(2, '0')} ${safeName(chapters[currentChapter]?.title ?? '')}.wav`;
+                    await downloadBlob(new Blob([wav], { type: 'audio/wav' }), name);
+                  }}
+                >
+                  <Icon name="download" size={16} /> Save this chapter’s audio
+                </button>
+              </>
+            )}
             {active.length > 0 &&
               (audioQueue.isPaused ? (
                 <button className="btn" onClick={() => audioQueue.resume()}>
@@ -194,7 +234,8 @@ export function NarrationPanel({
                 onClick={async () => {
                   audioQueue.cancel(book.id);
                   await deleteBookAudio(book.id);
-                  await refresh();
+                  audioQueue.clearFinished();
+                  setDeleted((n) => n + 1);
                   toast('Deleted this book’s audio');
                 }}
               >

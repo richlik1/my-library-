@@ -18,6 +18,8 @@ export function SettingsPage() {
   const [persisted, setPersisted] = useState<boolean | null>(null);
   const [busy, setBusy] = useState(false);
   const [newCat, setNewCat] = useState('');
+  const [word, setWord] = useState('');
+  const [say, setSay] = useState('');
   const fileRef = useRef<HTMLInputElement>(null);
 
   const refreshStorage = async () => {
@@ -190,6 +192,75 @@ export function SettingsPage() {
       </section>
 
       <section className="card">
+        <h3>Natural voice</h3>
+        <div className="rate-head" style={{ marginBottom: 6 }}>
+          <span>Pauses between sentences</span>
+        </div>
+        <div className="seg-nav" role="radiogroup" aria-label="Pauses between sentences">
+          {(['short', 'normal', 'long'] as const).map((p) => (
+            <a
+              key={p}
+              href="#"
+              role="radio"
+              aria-checked={settings.narrationPause === p}
+              className={settings.narrationPause === p ? 'active' : ''}
+              onClick={(e) => {
+                e.preventDefault();
+                update({ narrationPause: p });
+              }}
+            >
+              {p === 'short' ? 'Short' : p === 'normal' ? 'Normal' : 'Long'}
+            </a>
+          ))}
+        </div>
+        <div className="rate-head" style={{ margin: '14px 0 6px' }}>
+          <span>Pronunciations</span>
+        </div>
+        {settings.pronunciations.length > 0 && (
+          <ul className="list" aria-label="Pronunciations">
+            {settings.pronunciations.map((p, i) => (
+              <li key={`${p.word}-${i}`}>
+                <div className="list-row">
+                  <span className="grow">
+                    <strong>{p.word}</strong> → {p.say}
+                  </span>
+                  <button
+                    className="icon-btn"
+                    aria-label={`Remove ${p.word}`}
+                    onClick={() => update({ pronunciations: settings.pronunciations.filter((_, j) => j !== i) })}
+                  >
+                    <Icon name="close" size={16} />
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+        <form
+          className="row"
+          style={{ marginTop: 8 }}
+          onSubmit={(e) => {
+            e.preventDefault();
+            const w = word.trim();
+            const s2 = say.trim();
+            if (!w || !s2) return;
+            update({ pronunciations: [...settings.pronunciations.filter((p) => p.word.toLowerCase() !== w.toLowerCase()), { word: w, say: s2 }] });
+            setWord('');
+            setSay('');
+          }}
+        >
+          <input className="input" style={{ flex: 1, minWidth: 110 }} placeholder="Word (e.g. StayOps)" aria-label="Word" value={word} onChange={(e) => setWord(e.target.value)} />
+          <input className="input" style={{ flex: 1, minWidth: 110 }} placeholder="Say it as (e.g. Stay Ops)" aria-label="Say it as" value={say} onChange={(e) => setSay(e.target.value)} />
+          <button className="btn" type="submit">
+            Add
+          </button>
+        </form>
+        <p className="small muted" style={{ marginTop: 10, marginBottom: 0 }}>
+          Changes apply to chapters made from now on. Use “Regenerate this chapter” in Voice &amp; speed to remake one you already have.
+        </p>
+      </section>
+
+      <section className="card">
         <h3>Categories</h3>
         <div className="chips" style={{ flexWrap: 'wrap' }}>
           {settings.categories.map((c) => (
@@ -262,9 +333,14 @@ export function SettingsPage() {
               Spoken Content → Voices. Then pick them in Voice &amp; speed.
             </li>
             <li>
-              <strong>Honest limitation:</strong> iOS stops web-app speech when the screen locks or you switch apps. My Library keeps the
-              screen awake while it reads and saves your exact place; when you come back it picks up from the same sentence. Background and
-              lock-screen listening require a native app (this project is structured for that).
+              <strong>To listen with the screen locked</strong>, open a book, tap <strong>Voice &amp; speed</strong>, choose{' '}
+              <strong>Natural voice</strong> and generate a few chapters (or the whole book) first. Generated chapters keep playing locked,
+              in other apps and offline, with Lock Screen controls.
+            </li>
+            <li>
+              <strong>Honest limitation:</strong> the Device voice (browser speech) stops when the screen locks or you switch apps; My Library
+              keeps the screen awake while it reads and resumes from the same sentence. Natural voice chapters are made only while the app is
+              open, so keep it open until the chapters you need are ready.
             </li>
           </ol>
         </section>
@@ -279,8 +355,9 @@ export function SettingsPage() {
         <h3>Privacy</h3>
         <p style={{ marginBottom: 0 }}>
           My Library has no account, no server, no analytics and no tracking. Books, progress and notes are stored only in this browser’s
-          private storage on this device. Text is spoken by your device’s built-in voices (some “online” voices on Chrome/Android may use
-          the browser maker’s speech service — the voice list marks them).
+          private storage on this device. Device voices are your device’s built-in voices (some “online” voices on Chrome/Android may use
+          the browser maker’s speech service — the voice list marks them). Natural voice downloads the free Kokoro voice model once from
+          Hugging Face; after that, audio is made on this device and your book text never leaves it.
         </p>
       </section>
       <p className="muted small" style={{ textAlign: 'center' }}>

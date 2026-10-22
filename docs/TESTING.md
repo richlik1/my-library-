@@ -1,7 +1,7 @@
 # Test status
 
 **passed** = ran and passed · **failed** · **blocked** = can't run in the available environment · **not run** = could run, hasn't yet.
-Updated 2026-10-21. Environment: Linux, Chromium (Playwright), Node 22. No Mac, no iOS Simulator, no iPhone attached.
+Updated 2026-10-22. Environment: Linux, Chromium (Playwright), Node 22. No Mac, no iOS Simulator, no iPhone attached.
 
 ## Automated (run with `npm test` and `npm run test:e2e`)
 
@@ -15,8 +15,9 @@ Updated 2026-10-21. Environment: Linux, Chromium (Playwright), Node 22. No Mac, 
 | Speech chunks | Offsets, ordering, max size, abbreviations | passed |
 | Device-voice narration | Play, pause, resume at the word, skip, chapters, retries, interruptions, sleep timer | passed |
 | Natural voice core | WAV encoding, sentence timings, retries, failure reasons, pronunciation dictionary | passed |
-| Generation queue | Order, cache reuse (no duplicate synthesis), regenerate on voice change, retry, pause/resume/cancel | passed |
+| Generation queue | Order, cache reuse (no duplicate synthesis), regenerate on voice or pause/pronunciation change, retry, pause/resume/cancel | passed |
 | Audio cache | Deleting a book deletes its audio | passed |
+| Narration settings (Chromium) | Pause length + pronunciation list used in generated audio; regenerate a chapter; save a chapter as WAV | passed |
 | Audio playback (Chromium) | Generate → play real audio file → 30 s skip into next chapter → auto-advance → pause → reload → resume from cache | passed |
 | Kokoro adapter (Node, real model) | Token ids identical to the Python reference (44/44); audio produced | passed (manual run) |
 | Kokoro in browser (Chromium, WebAssembly, real model) | Model load, chapter generation and playback | passed (opt-in test `e2e/kokoro-real.spec.ts`) |
@@ -51,5 +52,7 @@ two generated chapters.
 | 12 | Speed 1.5× | Faster, same pitch |
 | 13 | WebGPU switch on (Voice & speed) | Faster generation, or turn off if it fails |
 | 14 | Low storage | Clear error, no data loss |
+| 15 | Voice & speed → Save this chapter’s audio | WAV file can be saved to Files |
+| 16 | Lock the phone while chapters are still generating | Ready chapters play; the app warns that the next one needs the app open |
 
 Report results as passed / failed (with what happened) so this table can be updated.

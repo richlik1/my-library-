@@ -100,3 +100,26 @@ test('natural voice: plays through to the next chapter by itself', async ({ page
   await expect(page.locator('.player-title .ct')).toContainText('Chapter 2', { timeout: 15_000 });
   await expect(page.getByRole('button', { name: 'Pause' })).toBeVisible();
 });
+
+test('natural voice: pronunciations are used, a chapter can be regenerated and saved', async ({ page }) => {
+  await page.goto('./#/settings');
+  await page.getByRole('radio', { name: 'Long' }).click();
+  await page.getByLabel('Word').fill('chapter');
+  await page.getByLabel('Say it as').fill('CHAP-TER');
+  await page.getByLabel('Say it as').press('Enter');
+  await expect(page.getByLabel('Pronunciations')).toContainText('CHAP-TER');
+
+  await openBookWithNaturalVoice(page);
+  await page.getByRole('button', { name: /Voice/ }).click();
+  await expect(page.getByRole('button', { name: 'This chapter is ready' })).toBeVisible({ timeout: 15_000 });
+  expect(await page.evaluate(() => (window as unknown as { __engineCalls: string[] }).__engineCalls.join('|'))).toContain('CHAP-TER');
+
+  const download = page.waitForEvent('download');
+  await page.getByRole('button', { name: /Save this chapter/ }).click();
+  expect((await download).suggestedFilename()).toMatch(/^two - 01 .*\.wav$/);
+
+  const before = await page.evaluate(() => (window as unknown as { __engineCalls: string[] }).__engineCalls.length);
+  await page.getByRole('button', { name: 'Regenerate this chapter' }).click();
+  await expect.poll(() => page.evaluate(() => (window as unknown as { __engineCalls: string[] }).__engineCalls.length), { timeout: 15_000 }).toBeGreaterThan(before);
+  await expect(page.getByRole('button', { name: 'This chapter is ready' })).toBeVisible({ timeout: 15_000 });
+});

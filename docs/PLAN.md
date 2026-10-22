@@ -76,8 +76,9 @@ AI (later)       →  retrieval over stored text  →  local model if available,
 - [ ] Owner tests on iPhone: lock screen, app switching, calls, Bluetooth (checklist in `docs/TESTING.md`) — **not run**
 
 ### Phase 2 — Natural narration
-Piper engine; voice per book; pronunciation dictionary; pause/paragraph spacing; whole-book generation; storage
-management; desktop generation script; audio export (WAV now; M4A where encoding is available).
+Done: voice per book, pronunciation list and pause length (Settings → Natural voice), whole-book generation, storage
+management, regenerate a chapter, save a chapter as WAV, generate two chapters ahead with a warning when the next isn't ready.
+Still to do: Piper engine; desktop generation script; M4A export.
 
 ### Phase 3 — AI reading assistant
 Local search over chunks (with chapter/page references); evaluate on-device LLM; grounded Q&A with citations; chapter
