@@ -1,6 +1,7 @@
-import type { ChapterAudio, NeuralEngine } from './types';
-import { audioKey } from './types';
-import { ChunkGenerationError, generateChapterAudio, type GenerateOptions } from './generate';
+import { chunkAt, chunkText } from '../speech/chunker';
+import type { ChapterAudio, ChapterAudioMeta, NeuralEngine } from './types';
+import { partKey, partRanges } from './types';
+import { ChunkGenerationError, generatePart, type GenerateOptions } from './generate';
 import { textHash } from './timing';
 
 export type JobStatus = 'queued' | 'generating' | 'done' | 'failed' | 'cancelled';
@@ -14,6 +15,11 @@ export interface Job {
   /** What's happening now, e.g. downloading the voice model. */
   label?: string;
   error?: string;
+  /** Parts of the chapter ready to play, out of `parts`. */
+  partsDone?: number;
+  parts?: number;
+  /** Where the listener is in this chapter: that part is made first. */
+  startOffset?: number;
 }
 
 export interface QueueDeps {
@@ -22,8 +28,10 @@ export interface QueueDeps {
   voiceFor(bookId: string): Promise<string>;
   /** Pauses and pronunciations to use; changing them makes chapters regenerate when requested. */
   options?(): Promise<Pick<GenerateOptions, 'sentencePause' | 'paragraphPause' | 'pronunciations'>>;
-  getAudioMeta(key: string): Promise<Omit<ChapterAudio, 'wav'> | undefined>;
+  /** Everything cached for a chapter (parts, or one older whole-chapter file). */
+  chapterAudio(bookId: string, chapter: number): Promise<ChapterAudioMeta[]>;
   putAudio(a: ChapterAudio): Promise<void>;
+  deleteAudio(keys: string[]): Promise<void>;
 }
 
 type Listener = (jobs: Job[]) => void;
@@ -56,13 +64,18 @@ export class AudioQueue {
     return this.paused;
   }
 
-  enqueue(bookId: string, chapters: number[]) {
-    for (const chapter of chapters) {
+  /** `startOffset` (for the first chapter) makes the part the listener is at first. */
+  enqueue(bookId: string, chapters: number[], opts: { startOffset?: number } = {}) {
+    chapters.forEach((chapter, i) => {
+      const startOffset = i === 0 ? opts.startOffset : undefined;
       const existing = this.jobs.find((j) => j.bookId === bookId && j.chapter === chapter);
-      if (existing && ['queued', 'generating'].includes(existing.status)) continue;
-      if (existing) Object.assign(existing, { status: 'queued', progress: 0, error: undefined });
-      else this.jobs.push({ bookId, chapter, status: 'queued', progress: 0 });
-    }
+      if (existing && ['queued', 'generating'].includes(existing.status)) {
+        if (existing.status === 'queued' && startOffset !== undefined) existing.startOffset = startOffset;
+        return;
+      }
+      if (existing) Object.assign(existing, { status: 'queued', progress: 0, error: undefined, startOffset });
+      else this.jobs.push({ bookId, chapter, status: 'queued', progress: 0, startOffset });
+    });
     this.emit();
     void this.pump();
   }
@@ -138,31 +151,55 @@ export class AudioQueue {
     const extra = (await this.deps.options?.()) ?? {};
     // The cache key covers the text and the narration settings that change the audio.
     const hash = textHash(`${text}\u0000${JSON.stringify(extra)}`);
-    const key = audioKey(bookId, chapter);
-    const cached = await this.deps.getAudioMeta(key);
-    if (cached && cached.voice === voice && cached.engine === engine.id && cached.textHash === hash) {
+    const matches = (m: ChapterAudioMeta) => m.voice === voice && m.engine === engine.id && m.textHash === hash;
+    const metas = await this.deps.chapterAudio(bookId, chapter);
+    if (metas.some((m) => m.part === undefined && matches(m))) {
+      Object.assign(job, { status: 'done', progress: 1, partsDone: 1, parts: 1 });
+      return this.emit();
+    }
+    const chunks = chunkText(text);
+    const ranges = partRanges(chunks.length);
+    if (!ranges.length) ranges.push([0, 0]);
+    const valid = metas.filter((m) => m.part !== undefined && matches(m) && m.parts === ranges.length);
+    // Audio in another voice or from older settings is replaced, never mixed in.
+    const stale = metas.filter((m) => !valid.includes(m)).map((m) => m.key);
+    if (stale.length) await this.deps.deleteAudio(stale);
+    const have = new Set(valid.map((m) => m.part!));
+    const sentences = (p: number) => ranges[p][1] - ranges[p][0];
+    let doneSentences = [...have].reduce((s, p) => s + sentences(p), 0);
+    Object.assign(job, { parts: ranges.length, partsDone: have.size });
+    if (have.size === ranges.length) {
       Object.assign(job, { status: 'done', progress: 1 });
       return this.emit();
     }
-    Object.assign(job, { status: 'generating', progress: 0 });
+    const startChunk = job.startOffset !== undefined ? chunkAt(chunks, job.startOffset) : 0;
+    const startPart = Math.max(0, ranges.findIndex(([a, b]) => startChunk >= a && startChunk < b));
+    const order = [...ranges.keys()].map((i) => (i + startPart) % ranges.length).filter((p) => !have.has(p));
+    Object.assign(job, { status: 'generating', progress: doneSentences / Math.max(1, chunks.length) });
     this.emit();
     this.controller = new AbortController();
     try {
       await engine.load((_fraction, label) => {
-        Object.assign(job, { progress: 0, label });
+        Object.assign(job, { label });
         this.emit();
       });
       job.label = undefined;
-      const result = await generateChapterAudio(engine, text, {
-        voice,
-        signal: this.controller.signal,
-        ...extra,
-        onProgress: (done, total) => {
-          job.progress = done / total;
-          this.emit();
-        },
-      });
-      await this.deps.putAudio({ key, bookId, chapter, engine: engine.id, voice, textHash: hash, createdAt: Date.now(), ...result });
+      for (const p of order) {
+        const result = await generatePart(engine, chunks, ranges[p], {
+          voice,
+          signal: this.controller.signal,
+          ...extra,
+          onProgress: (done) => {
+            job.progress = (doneSentences + done) / Math.max(1, chunks.length);
+            this.emit();
+          },
+        });
+        const key = partKey(bookId, chapter, p);
+        await this.deps.putAudio({ key, bookId, chapter, engine: engine.id, voice, textHash: hash, createdAt: Date.now(), part: p, parts: ranges.length, ...result });
+        doneSentences += sentences(p);
+        job.partsDone = (job.partsDone ?? 0) + 1;
+        this.emit();
+      }
       Object.assign(job, { status: 'done', progress: 1 });
     } catch (e) {
       if ((e as Error).name === 'AbortError') {

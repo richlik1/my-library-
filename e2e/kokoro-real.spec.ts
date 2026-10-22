@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 import { speechStub } from './fixtures';
 // @ts-expect-error plain JS helper
 import { serveModel } from './model-server.mjs';
@@ -21,31 +21,47 @@ const require = createRequire(import.meta.url);
 
 test.skip(!MODEL_DIR || !existsSync(join(MODEL_DIR, 'onnx/model_quantized.onnx')), 'KOKORO_TEST_MODEL_DIR not set');
 
-test('real Kokoro voice generates and plays a chapter in the browser', async ({ page }) => {
-  test.setTimeout(10 * 60_000);
+async function useLocalModel(page: Page) {
   // The model is served by a local server through the app's model-host option; the small
   // voice files (fetched from a fixed Hugging Face URL by kokoro-js) are intercepted.
   const server = await serveModel(MODEL_DIR!, 'onnx-community/Kokoro-82M-v1.0-ONNX', 4199);
-  test.info().attach('model-host', { body: 'http://localhost:4199' });
   const voicesDir = join(dirname(require.resolve('kokoro-js')), '../voices');
   const served: string[] = [];
   await page.addInitScript(() => {
     (window as unknown as { __MY_LIBRARY_MODEL_HOST__: string }).__MY_LIBRARY_MODEL_HOST__ = 'http://localhost:4199';
   });
   page.on('request', (r) => r.url().startsWith('http://localhost:4199/') && served.push(r.url().split('/resolve/main/')[1]));
-  await page.route('https://huggingface.co/**', async (route) => {
+  // Requests from the voice worker are not seen by page.route, so voice files are served by the local server too.
+  await page.context().route('https://huggingface.co/**', async (route) => {
     const rel = /\/resolve\/main\/(voices\/.+)$/.exec(new URL(route.request().url()).pathname)?.[1];
     const file = rel ? join(voicesDir, rel.slice(7)) : '';
     if (file && existsSync(file)) {
       served.push(rel!);
-      return route.fulfill({ path: file, headers: { 'access-control-allow-origin': '*' } });
+      return route.fulfill({ path: file, headers: { 'access-control-allow-origin': '*', 'cross-origin-resource-policy': 'cross-origin' } });
     }
     return route.fulfill({ status: 404, body: 'not found' });
   });
-  test.info().annotations.push({ type: 'cleanup', description: 'model server' });
   page.once('close', () => server.close());
   page.on('console', (m) => m.type() === 'error' && console.log('browser error:', m.text().slice(0, 300)));
   await page.addInitScript(speechStub);
+  return served;
+}
+
+test('real Kokoro: speed test in Settings', async ({ page }) => {
+  test.setTimeout(10 * 60_000);
+  await useLocalModel(page);
+  await page.goto('./#/settings');
+  await page.getByRole('button', { name: 'Test natural voice speed' }).click();
+  const status = page.getByRole('status').filter({ hasText: /listening speed|couldn’t start/ });
+  await expect(status).toBeVisible({ timeout: 9 * 60_000 });
+  const text = await status.textContent();
+  console.log(`Speed test (crossOriginIsolated=${await page.evaluate(() => crossOriginIsolated)}): ${text}`);
+  expect(text).toContain('listening speed');
+});
+
+test('real Kokoro voice generates and plays a chapter in the browser', async ({ page }) => {
+  test.setTimeout(10 * 60_000);
+  const served = await useLocalModel(page);
   await page.goto('./');
   const para =
     'The lighthouse stood at the edge of the world. Every night its keeper climbed the long stairs to light the lamp, and every morning he climbed down again, tired but content.';
@@ -75,4 +91,22 @@ test('real Kokoro voice generates and plays a chapter in the browser', async ({ 
       `chapter 2 generated in ${secondSeconds.toFixed(1)} s for ${ch2} of audio; served ${served.join(', ')}`,
   );
   expect(served).toContain('onnx/model_quantized.onnx');
+});
+
+test('real Kokoro: time from Play to first sound on a long chapter', async ({ page }) => {
+  test.setTimeout(10 * 60_000);
+  await useLocalModel(page);
+  await page.goto('./');
+  const para =
+    'The lighthouse stood at the edge of the world. Every night its keeper climbed the long stairs to light the lamp, and every morning he climbed down again, tired but content.';
+  await page.getByTestId('file-input').setInputFiles({ name: 'long.txt', mimeType: 'text/plain', buffer: Buffer.from(`Chapter 1\n\n${Array(12).fill(para).join('\n\n')}`) });
+  await page.getByRole('button', { name: 'Save to library' }).click();
+  await page.getByRole('button', { name: 'Open long' }).click();
+  await page.getByRole('button', { name: /Voice/ }).click();
+  await page.getByRole('radio', { name: 'Natural voice' }).click();
+  await page.getByRole('button', { name: 'Close' }).click();
+  const t0 = Date.now();
+  await page.getByTestId('play').click();
+  await expect.poll(async () => (await page.locator('.scrub span').first().textContent())?.trim(), { timeout: 9 * 60_000 }).not.toBe('0:00');
+  console.log(`Real Kokoro: first sound ${((Date.now() - t0) / 1000).toFixed(1)} s after Play (first use, includes model start) on a 24-sentence chapter`);
 });

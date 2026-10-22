@@ -4,6 +4,7 @@ import type { Annotation, Book, BookContent, ImportedBook, Progress, Settings, S
 import { DEFAULT_SETTINGS } from '../types';
 import type { DailyBlock, GrowthBookState, GrowthNote, WeeklyReview } from '../../growth/types';
 import type { ChapterAudio } from '../audio/types';
+import { concatWavs } from '../audio/wav';
 
 /**
  * All data lives in this browser's IndexedDB. Nothing is ever uploaded.
@@ -246,15 +247,36 @@ export async function listBookAudio(bookId: string) {
   return all.sort((a, b) => a.chapter - b.chapter);
 }
 
-export async function deleteChapterAudio(key: string) {
+/** Everything cached for one chapter: its parts in order, or one older whole-chapter file. */
+export async function getChapterAudio(bookId: string, chapter: number) {
+  const all = await (await db()).getAllFromIndex('audio', 'byBook', bookId);
+  return all.filter((a) => a.chapter === chapter).sort((a, b) => (a.part ?? -1) - (b.part ?? -1));
+}
+
+export async function deleteAudio(keys: string[]) {
   const d = await db();
   const tx = d.transaction(['audio', 'audioData'], 'readwrite');
-  await Promise.all([tx.objectStore('audio').delete(key), tx.objectStore('audioData').delete(key)]);
+  await Promise.all(keys.flatMap((k) => [tx.objectStore('audio').delete(k), tx.objectStore('audioData').delete(k)]));
   await tx.done;
 }
 
+export async function deleteChapterAudio(bookId: string, chapter: number) {
+  await deleteAudio((await getChapterAudio(bookId, chapter)).map((a) => a.key));
+}
+
+/** A whole chapter's audio as one WAV file (joins its parts), if it is complete. */
+export async function getChapterWav(bookId: string, chapter: number): Promise<ArrayBuffer | undefined> {
+  const metas = await getChapterAudio(bookId, chapter);
+  const legacy = metas.find((m) => m.part === undefined);
+  if (legacy) return getAudioWav(legacy.key);
+  if (!metas.length || metas.length !== metas[0].parts) return undefined;
+  const wavs = await Promise.all(metas.map((m) => getAudioWav(m.key)));
+  if (wavs.some((w) => !w)) return undefined;
+  return concatWavs(wavs as ArrayBuffer[]);
+}
+
 export async function deleteBookAudio(bookId: string) {
-  for (const a of await listBookAudio(bookId)) await deleteChapterAudio(a.key);
+  await deleteAudio((await listBookAudio(bookId)).map((a) => a.key));
 }
 
 /** Total size of cached audio, in bytes (WAV: 44-byte header + 2 bytes per sample). */

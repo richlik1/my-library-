@@ -57,6 +57,8 @@ export default defineConfig({
       },
     }),
   ],
+  // COI=1 serves the preview cross-origin isolated (multi-threaded voice), for benchmarks.
+  preview: process.env.COI ? { headers: { 'Cross-Origin-Opener-Policy': 'same-origin', 'Cross-Origin-Embedder-Policy': 'require-corp' } } : {},
   worker: { format: 'es' },
   build: {
     target: 'es2020',

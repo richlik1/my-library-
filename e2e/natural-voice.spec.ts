@@ -123,3 +123,35 @@ test('natural voice: pronunciations are used, a chapter can be regenerated and s
   await expect.poll(() => page.evaluate(() => (window as unknown as { __engineCalls: string[] }).__engineCalls.length), { timeout: 15_000 }).toBeGreaterThan(before);
   await expect(page.getByRole('button', { name: 'This chapter is ready' })).toBeVisible({ timeout: 15_000 });
 });
+
+test('natural voice: a long chapter starts playing after its first sentences and continues part by part', async ({ page }) => {
+  // Slower, shorter-audio stand-in: 60 ms of work and 12 ms of audio per character.
+  await page.addInitScript(() => {
+    const w = window as unknown as Record<string, { synthesize: (t: string) => Promise<unknown> } & Record<string, unknown>>;
+    const engine = w.__MY_LIBRARY_TEST_ENGINE__;
+    engine.synthesize = async (text: string) => {
+      (w.__engineCalls as unknown as string[]).push(text);
+      await new Promise((r) => setTimeout(r, 60));
+      const sr = 8000;
+      const s = new Float32Array(Math.round(text.length * 0.012 * sr));
+      for (let i = 0; i < s.length; i++) s[i] = 0.05 * Math.sin((2 * Math.PI * 220 * i) / sr);
+      return { samples: s, sampleRate: sr };
+    };
+  });
+  const sentences = Array.from({ length: 40 }, (_, i) => `Sentence ${i + 1} of the long chapter.`).join(' ');
+  await page.goto('./');
+  await page.getByTestId('file-input').setInputFiles({ name: 'long.txt', mimeType: 'text/plain', buffer: Buffer.from(`Chapter 1\n\n${sentences}`) });
+  await page.getByRole('button', { name: 'Save to library' }).click();
+  await page.getByRole('button', { name: 'Open long' }).click();
+  await page.getByRole('button', { name: /Voice/ }).click();
+  await page.getByRole('radio', { name: 'Natural voice' }).click();
+  await page.getByRole('button', { name: 'Close' }).click();
+  await page.getByTestId('play').click();
+  // Playing begins while the chapter is still being made.
+  await expect.poll(() => timeShown(page), { timeout: 10_000 }).not.toBe('0:00');
+  const calls = await page.evaluate(() => (window as unknown as { __engineCalls: string[] }).__engineCalls.length);
+  expect(calls).toBeLessThan(40);
+  // ...and carries on into later parts without stopping.
+  await expect(page.locator('.chunk.active')).toContainText(/Sentence (1[0-9]|2[0-9]) /, { timeout: 30_000 });
+  await expect(page.getByRole('button', { name: 'Pause' })).toBeVisible();
+});

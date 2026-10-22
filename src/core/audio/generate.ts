@@ -1,6 +1,6 @@
-import { chunkText } from '../speech/chunker';
+import { chunkText, type Chunk } from '../speech/chunker';
 import type { ChunkTiming, NeuralEngine } from './types';
-import { encodeWav, silence, trimSilence } from './wav';
+import { encodeWav, trimSilence } from './wav';
 
 export class ChunkGenerationError extends Error {
   constructor(
@@ -52,12 +52,21 @@ const abortError = () => Object.assign(new Error('Generation cancelled'), { name
  */
 export async function generateChapterAudio(engine: NeuralEngine, text: string, opts: GenerateOptions): Promise<GeneratedChapter> {
   const chunks = chunkText(text);
+  return generatePart(engine, chunks, [0, chunks.length], opts);
+}
+
+/**
+ * Generates sentences [from, to) of a chapter as one WAV file. Timings start
+ * at 0. Ends with the pause before the next sentence, so parts played one
+ * after another sound like one recording.
+ */
+export async function generatePart(engine: NeuralEngine, chunks: Chunk[], [from, to]: [number, number], opts: GenerateOptions): Promise<GeneratedChapter> {
   const retries = opts.retries ?? 2;
   const parts: Float32Array[] = [];
   const timings: ChunkTiming[] = [];
   let sampleRate = 24000;
   let t = 0;
-  for (let i = 0; i < chunks.length; i++) {
+  for (let i = from; i < to; i++) {
     if (opts.signal?.aborted) throw abortError();
     const c = chunks[i];
     const spoken = applyPronunciations(c.text, opts.pronunciations);
@@ -83,10 +92,11 @@ export async function generateChapterAudio(engine: NeuralEngine, text: string, o
     const next = chunks[i + 1];
     if (next) {
       const pause = next.paragraph !== c.paragraph ? (opts.paragraphPause ?? 0.55) : (opts.sentencePause ?? 0.18);
-      parts.push(silence(pause, sampleRate));
-      t += pause;
+      const n = Math.round(pause * sampleRate);
+      parts.push(new Float32Array(n));
+      t += n / sampleRate;
     }
-    opts.onProgress?.(i + 1, chunks.length);
+    opts.onProgress?.(i - from + 1, to - from);
   }
   return { wav: encodeWav(parts, sampleRate), sampleRate, duration: t, timings };
 }

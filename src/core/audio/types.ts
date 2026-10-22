@@ -55,6 +55,46 @@ export interface ChapterAudio {
   /** 16-bit mono WAV file bytes. */
   wav: ArrayBuffer;
   createdAt: number;
+  /**
+   * Chapters are made in parts, so listening can start after the first few
+   * sentences. Absent on audio made before parts existed (one file per chapter).
+   * Part timings are relative to the start of the part.
+   */
+  part?: number;
+  parts?: number;
 }
 
+export type ChapterAudioMeta = Omit<ChapterAudio, 'wav'>;
+
 export const audioKey = (bookId: string, chapter: number) => `${bookId}:${chapter}`;
+export const partKey = (bookId: string, chapter: number, part: number) => `${bookId}:${chapter}:${part}`;
+
+/**
+ * Splits a chapter's sentences into parts: a tiny first part so playback can
+ * start quickly, then bigger parts. Returns [from, to) sentence index ranges.
+ */
+export function partRanges(sentences: number): Array<[number, number]> {
+  const out: Array<[number, number]> = [];
+  for (let i = 0; i < sentences; ) {
+    const size = [1, 5, 14][out.length] ?? 24;
+    out.push([i, Math.min(sentences, i + size)]);
+    i += size;
+  }
+  return out;
+}
+
+/** The usable audio for each chapter: complete when every part (or a legacy single file) is present. */
+export function chapterAudioStatus(metas: ChapterAudioMeta[]): Map<number, { complete: boolean; done: number; total: number; legacy?: boolean }> {
+  const out = new Map<number, { complete: boolean; done: number; total: number; legacy?: boolean }>();
+  for (const m of metas) {
+    const cur = out.get(m.chapter);
+    if (m.part === undefined || cur?.legacy) {
+      out.set(m.chapter, { complete: true, done: 1, total: 1, legacy: true });
+      continue;
+    }
+    const done = (cur?.done ?? 0) + 1;
+    const total = m.parts ?? 1;
+    out.set(m.chapter, { done, total, complete: done >= total });
+  }
+  return out;
+}

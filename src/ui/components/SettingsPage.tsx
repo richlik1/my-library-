@@ -10,6 +10,9 @@ import { Icon } from './Icon';
 import { downloadBlob } from './PlayerSheets';
 import { ImportCheck } from './ImportCheck';
 import { isNativeApp } from '../platform';
+import { benchmarkVoice, describeBenchmark } from '../../core/audio/benchmark';
+import { DEFAULT_KOKORO_VOICE, voiceThreads } from '../../core/audio/kokoroEngine';
+import { neuralEngine } from '../narration';
 
 export function SettingsPage() {
   const { settings, update } = useSettings();
@@ -20,6 +23,20 @@ export function SettingsPage() {
   const [newCat, setNewCat] = useState('');
   const [word, setWord] = useState('');
   const [say, setSay] = useState('');
+  const [bench, setBench] = useState<{ busy: boolean; text: string } | null>(null);
+
+  const runBench = async () => {
+    setBench({ busy: true, text: 'Starting…' });
+    try {
+      const engine = neuralEngine();
+      const b = await benchmarkVoice(engine, DEFAULT_KOKORO_VOICE, (label) => setBench({ busy: true, text: label }));
+      const where = (engine as { runsIn?: string }).runsIn === 'worker' ? 'in the background' : 'on the page';
+      const threads = voiceThreads();
+      setBench({ busy: false, text: `${describeBenchmark(b)} (Runs ${where}, ${threads} processor thread${threads > 1 ? 's' : ''}.)` });
+    } catch (e) {
+      setBench({ busy: false, text: `The natural voice couldn’t start on this device: ${(e as Error).message}` });
+    }
+  };
   const fileRef = useRef<HTMLInputElement>(null);
 
   const refreshStorage = async () => {
@@ -258,6 +275,16 @@ export function SettingsPage() {
         <p className="small muted" style={{ marginTop: 10, marginBottom: 0 }}>
           Changes apply to chapters made from now on. Use “Regenerate this chapter” in Voice &amp; speed to remake one you already have.
         </p>
+        <div className="row" style={{ marginTop: 14, alignItems: 'center' }}>
+          <button className="btn" onClick={runBench} disabled={bench?.busy}>
+            {bench?.busy ? 'Testing…' : 'Test natural voice speed'}
+          </button>
+        </div>
+        {bench && (
+          <p className="small" role="status" style={{ marginBottom: 0 }}>
+            {bench.text}
+          </p>
+        )}
       </section>
 
       <section className="card">

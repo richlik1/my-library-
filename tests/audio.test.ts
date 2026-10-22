@@ -4,9 +4,9 @@ import { ChunkGenerationError, generateChapterAudio } from '../src/core/audio/ge
 import { AudioQueue } from '../src/core/audio/queue';
 import { chunkIndexAtTime, offsetAtTime, textHash, timeAtOffset } from '../src/core/audio/timing';
 import type { ChapterAudio, NeuralEngine } from '../src/core/audio/types';
-import { audioKey } from '../src/core/audio/types';
-import { decodeWavInfo, encodeWav, trimSilence } from '../src/core/audio/wav';
-import { db, deleteBook, getAudioMeta, getAudioWav, listBookAudio, putAudio, resetDbConnection, saveImportedBook } from '../src/core/storage/db';
+import { chapterAudioStatus, partKey, partRanges } from '../src/core/audio/types';
+import { concatWavs, decodeWavInfo, encodeWav, trimSilence } from '../src/core/audio/wav';
+import { db, deleteAudio, deleteBook, getAudioWav, getChapterAudio, getChapterWav, listBookAudio, putAudio, resetDbConnection, saveImportedBook } from '../src/core/storage/db';
 import { chunkText } from '../src/core/speech/chunker';
 
 /** Deterministic engine: 0.01 s of tone per character, padded with silence. */
@@ -130,8 +130,9 @@ describe('generation queue and audio cache', () => {
     engine: () => engine,
     chapterText: async (_b: string, ch: number) => texts[ch],
     voiceFor: async () => voice,
-    getAudioMeta,
+    chapterAudio: getChapterAudio,
     putAudio,
+    deleteAudio,
   });
 
   it('generates chapters in order, caches them, and skips cached ones', async () => {
@@ -141,8 +142,11 @@ describe('generation queue and audio cache', () => {
     await q.idle();
     expect(q.list.map((j) => j.status)).toEqual(['done', 'done']);
     const meta = await listBookAudio('b1');
-    expect(meta.map((m) => m.chapter)).toEqual([0, 1]);
-    expect((await getAudioWav(audioKey('b1', 1)))!.byteLength).toBeGreaterThan(44);
+    expect([...chapterAudioStatus(meta).entries()].map(([c, s]) => [c, s.complete])).toEqual([
+      [0, true],
+      [1, true],
+    ]);
+    expect((await getChapterWav('b1', 1))!.byteLength).toBeGreaterThan(44);
     const calls = engine.calls.length;
     q.enqueue('b1', [0, 1]);
     await q.idle();
@@ -161,7 +165,7 @@ describe('generation queue and audio cache', () => {
     q2.enqueue('b1', [0]);
     await q2.idle();
     expect(engine.calls.length).toBeGreaterThan(before);
-    expect((await getAudioMeta(audioKey('b1', 0)))!.voice).toBe('v2');
+    expect((await getChapterAudio('b1', 0)).map((m) => m.voice)).toEqual(['v2', 'v2']);
   });
 
   it('regenerates when narration settings (pauses, pronunciations) change', async () => {
@@ -214,10 +218,91 @@ describe('generation queue and audio cache', () => {
     const q = new AudioQueue(deps(new FakeEngine(), [TEXT]));
     q.enqueue(book.id, [0]);
     await q.idle();
-    expect(await listBookAudio(book.id)).toHaveLength(1);
+    expect((await listBookAudio(book.id)).length).toBeGreaterThan(0);
     await deleteBook(book.id);
     expect(await listBookAudio(book.id)).toHaveLength(0);
-    expect(await getAudioWav(audioKey(book.id, 0))).toBeUndefined();
+    expect(await getAudioWav(partKey(book.id, 0, 0))).toBeUndefined();
+  });
+});
+
+describe('chapters made in parts', () => {
+  beforeEach(async () => {
+    await resetDbConnection();
+    const d = await db();
+    for (const s of ['audio', 'audioData'] as const) await d.clear(s);
+  });
+
+  const long = Array.from({ length: 30 }, (_, i) => `Sentence number ${i + 1} is here and it is fine.`).join(' ');
+  const deps = (engine: FakeEngine) => ({
+    engine: () => engine,
+    chapterText: async () => long,
+    voiceFor: async () => 'v1',
+    chapterAudio: getChapterAudio,
+    putAudio,
+    deleteAudio,
+  });
+
+  it('splits a chapter into a tiny first part, then bigger parts', () => {
+    expect(partRanges(1)).toEqual([[0, 1]]);
+    expect(partRanges(30)).toEqual([
+      [0, 1],
+      [1, 6],
+      [6, 20],
+      [20, 30],
+    ]);
+  });
+
+  it('makes the first part first, so listening can start early, and the whole chapter joins seamlessly', async () => {
+    const engine = new FakeEngine();
+    const q = new AudioQueue(deps(engine));
+    const seen: number[] = [];
+    q.subscribe((jobs) => jobs[0] && seen.push(jobs[0].partsDone ?? 0));
+    q.enqueue('b', [0]);
+    await q.idle();
+    const parts = await getChapterAudio('b', 0);
+    expect(parts.map((p) => [p.part, p.parts])).toEqual([
+      [0, 4],
+      [1, 4],
+      [2, 4],
+      [3, 4],
+    ]);
+    // Calls go in reading order; the first part (1 sentence) is ready after the first call.
+    expect(engine.calls[0]).toContain('number 1 ');
+    expect(seen).toContain(1);
+    // Part timings are relative to the part; joined audio length equals the parts' total.
+    expect(parts[1].timings[0].t0).toBe(0);
+    const whole = await getChapterWav('b', 0);
+    const total = parts.reduce((s, p) => s + p.duration, 0);
+    expect(decodeWavInfo(whole!).duration).toBeCloseTo(total, 2);
+  });
+
+  it('starts with the part where the listener is', async () => {
+    const engine = new FakeEngine();
+    const q = new AudioQueue(deps(engine));
+    q.enqueue('b', [0], { startOffset: long.indexOf('number 26 ') });
+    await q.idle();
+    expect(engine.calls[0]).toContain('number 21 '); // part 3 begins at sentence 21
+  });
+
+  it('only makes missing parts after an interruption', async () => {
+    const engine = new FakeEngine();
+    const q = new AudioQueue(deps(engine));
+    q.enqueue('b', [0]);
+    await q.idle();
+    await deleteAudio([partKey('b', 0, 2)]);
+    engine.calls = [];
+    q.enqueue('b', [0]);
+    await q.idle();
+    expect(engine.calls).toHaveLength(14);
+    expect(chapterAudioStatus(await getChapterAudio('b', 0)).get(0)).toMatchObject({ complete: true, done: 4, total: 4 });
+  });
+
+  it('joins WAV files', () => {
+    const a = encodeWav([new Float32Array([0.5, 0.5])], 8000);
+    const b = encodeWav([new Float32Array([-0.5])], 8000);
+    const j = concatWavs([a, b]);
+    expect(decodeWavInfo(j)).toEqual({ sampleRate: 8000, samples: 3, duration: 3 / 8000 });
+    expect(new DataView(j).getInt16(48, true)).toBe(-16384);
   });
 });
 

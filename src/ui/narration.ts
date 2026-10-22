@@ -1,7 +1,7 @@
 import { KokoroEngine, DEFAULT_KOKORO_VOICE } from '../core/audio/kokoroEngine';
 import { AudioQueue } from '../core/audio/queue';
-import type { NeuralEngine } from '../core/audio/types';
-import { getAudioMeta, getBook, getContent, getSettings, putAudio } from '../core/storage/db';
+import type { LoadProgress, NeuralEngine } from '../core/audio/types';
+import { deleteAudio, getBook, getChapterAudio, getContent, getSettings, putAudio } from '../core/storage/db';
 
 const DEVICE_KEY = 'ml-kokoro-device';
 
@@ -24,8 +24,52 @@ export function setKokoroDevice(d: 'wasm' | 'webgpu') {
   }
 }
 
-/** The natural-voice engine for the chosen device. Loaded on first use only. */
-export const kokoroEngine = () => engines[kokoroDevice()];
+/**
+ * The natural-voice engine for the chosen device, loaded on first use. If the
+ * graphics-chip version fails (not enough memory, unsupported GPU), it switches
+ * to the processor version by itself instead of leaving narration broken.
+ */
+class AutoKokoro implements NeuralEngine {
+  readonly id = 'kokoro';
+  readonly label = 'Kokoro natural voices';
+  private get current() {
+    return engines[kokoroDevice()];
+  }
+  get runsIn() {
+    return this.current.runsIn;
+  }
+  isLoaded() {
+    return this.current.isLoaded();
+  }
+  voices() {
+    return this.current.voices();
+  }
+  private fallBack(onProgress?: LoadProgress) {
+    setKokoroDevice('wasm');
+    onProgress?.(0, 'The graphics chip couldn’t run the voice; using the processor instead…');
+    return engines.wasm.load(onProgress);
+  }
+  async load(onProgress?: LoadProgress) {
+    try {
+      await this.current.load(onProgress);
+    } catch (e) {
+      if (kokoroDevice() !== 'webgpu') throw e;
+      await this.fallBack(onProgress);
+    }
+  }
+  async synthesize(text: string, voice: string) {
+    try {
+      return await this.current.synthesize(text, voice);
+    } catch (e) {
+      if (kokoroDevice() !== 'webgpu') throw e;
+      await this.fallBack();
+      return engines.wasm.synthesize(text, voice);
+    }
+  }
+}
+
+const auto = new AutoKokoro();
+export const kokoroEngine = (): NeuralEngine & { runsIn: string } => auto;
 
 /**
  * Automated tests can install a small deterministic engine (no model download)
@@ -41,8 +85,9 @@ export const audioQueue = new AudioQueue({
   engine: neuralEngine,
   chapterText: async (bookId, chapter) => (await getContent(bookId))?.chapters[chapter]?.text,
   voiceFor: async (bookId) => (await getBook(bookId))?.narration?.voice ?? DEFAULT_KOKORO_VOICE,
-  getAudioMeta,
+  chapterAudio: getChapterAudio,
   putAudio,
+  deleteAudio,
   options: async () => {
     const s = await getSettings();
     const pauses = { short: [0.1, 0.35], normal: [0.18, 0.55], long: [0.3, 0.9] }[s.narrationPause] ?? [0.18, 0.55];

@@ -2,8 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import { DEFAULT_KOKORO_VOICE, KOKORO_VOICES } from '../../core/audio/kokoroEngine';
 import type { Job } from '../../core/audio/queue';
 import { encodeWav } from '../../core/audio/wav';
-import { audioCacheBytes, deleteBookAudio, deleteChapterAudio, getAudioWav, listBookAudio, updateBook } from '../../core/storage/db';
-import { audioKey } from '../../core/audio/types';
+import { audioCacheBytes, deleteBookAudio, deleteChapterAudio, getChapterWav, listBookAudio, updateBook } from '../../core/storage/db';
+import { chapterAudioStatus } from '../../core/audio/types';
 import { downloadBlob, safeName } from './PlayerSheets';
 import type { Book, Chapter } from '../../core/types';
 import { useToast } from '../hooks/toast';
@@ -30,7 +30,11 @@ export function useReadyChapters(bookId: string, voice: string, jobs: Job[]): Se
   const doneCount = jobs.filter((j) => j.status === 'done').length;
   useEffect(() => {
     let alive = true;
-    void listBookAudio(bookId).then((list) => alive && setReady(new Set(list.filter((a) => a.voice === voice).map((a) => a.chapter))));
+    void listBookAudio(bookId).then((list) => {
+      if (!alive) return;
+      const status = chapterAudioStatus(list.filter((a) => a.voice === voice));
+      setReady(new Set([...status].filter(([, s]) => s.complete).map(([c]) => c)));
+    });
     return () => {
       alive = false;
     };
@@ -186,7 +190,7 @@ export function NarrationPanel({
                 <button
                   className="btn"
                   onClick={async () => {
-                    await deleteChapterAudio(audioKey(book.id, currentChapter));
+                    await deleteChapterAudio(book.id, currentChapter);
                     audioQueue.clearFinished();
                     audioQueue.enqueue(book.id, [currentChapter]);
                     audioQueue.prioritize(book.id, currentChapter);
@@ -198,7 +202,7 @@ export function NarrationPanel({
                 <button
                   className="btn"
                   onClick={async () => {
-                    const wav = await getAudioWav(audioKey(book.id, currentChapter));
+                    const wav = await getChapterWav(book.id, currentChapter);
                     if (!wav) return;
                     const name = `${safeName(book.title)} - ${String(currentChapter + 1).padStart(2, '0')} ${safeName(chapters[currentChapter]?.title ?? '')}.wav`;
                     await downloadBlob(new Blob([wav], { type: 'audio/wav' }), name);

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { AudioNarrator } from '../../core/audio/audioNarrator';
 import type { PlaybackController } from '../../core/speech/controller';
 import { Narrator, bookPercent, type NarratorState } from '../../core/speech/narrator';
-import { getAudioMeta, getAudioWav, saveProgress, updateBook } from '../../core/storage/db';
+import { getAudioWav, getChapterAudio, saveProgress, updateBook } from '../../core/storage/db';
 import { audioQueue } from '../narration';
 import type { Book, Chapter, Position } from '../../core/types';
 import { isSequenceEngine } from '../../core/speech/engine';
@@ -54,10 +54,10 @@ export function usePlayback(book: Book, chapters: Chapter[], start: Position, vo
             {
               bookId: book.id,
               chapters,
-              getMeta: getAudioMeta,
+              getChapterAudio: (c) => getChapterAudio(book.id, c),
               getWav: getAudioWav,
-              requestAudio: (chs) => {
-                audioQueue.enqueue(book.id, chs);
+              requestAudio: (chs, startOffset) => {
+                audioQueue.enqueue(book.id, chs, { startOffset });
                 audioQueue.prioritize(book.id, chs[0]);
               },
             },
@@ -65,10 +65,19 @@ export function usePlayback(book: Book, chapters: Chapter[], start: Position, vo
             pos,
           )
         : new Narrator(speechEngine, chapters, { ...opts, key: book.id }, pos);
-    // Tell the audio player as soon as a chapter it is waiting for has been generated.
+    // Tell the audio player as soon as more of a chapter it may be waiting for has been made.
+    const seenParts = new Map<number, number>();
     const unsubQueue =
       n instanceof AudioNarrator
-        ? audioQueue.subscribe((jobs) => jobs.forEach((j) => j.bookId === book.id && j.status === 'done' && n.audioReady(j.chapter)))
+        ? audioQueue.subscribe((jobs) =>
+            jobs.forEach((j) => {
+              if (j.bookId !== book.id) return;
+              const made = (j.partsDone ?? 0) + (j.status === 'done' ? 1000 : 0);
+              if (made === seenParts.get(j.chapter) || made === 0) return;
+              seenParts.set(j.chapter, made);
+              n.audioReady(j.chapter);
+            }),
+          )
         : () => undefined;
     setNarrator(n);
     updateBook(book.id, { lastOpenedAt: Date.now() }).catch(() => undefined);

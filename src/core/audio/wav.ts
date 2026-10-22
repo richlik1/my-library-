@@ -47,3 +47,22 @@ export function trimSilence(samples: Float32Array, threshold = 0.003): Float32Ar
   while (b > a && Math.abs(samples[b - 1]) < threshold) b--;
   return samples.subarray(a, b);
 }
+
+/** Joins 16-bit mono WAV files with the same sample rate into one. */
+export function concatWavs(files: ArrayBuffer[]): ArrayBuffer {
+  if (files.length === 1) return files[0];
+  const sampleRate = decodeWavInfo(files[0]).sampleRate;
+  const datas = files.map((f) => new Uint8Array(f, 44, new DataView(f).getUint32(40, true)));
+  const total = datas.reduce((s, d) => s + d.length, 0);
+  const out = new Uint8Array(44 + total);
+  out.set(new Uint8Array(encodeWav([], sampleRate)), 0);
+  const v = new DataView(out.buffer);
+  v.setUint32(4, 36 + total, true);
+  v.setUint32(40, total, true);
+  let o = 44;
+  for (const d of datas) {
+    out.set(d, o);
+    o += d.length;
+  }
+  return out.buffer;
+}

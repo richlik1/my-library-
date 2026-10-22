@@ -3,18 +3,19 @@ import { chunkAt, chunkText, type Chunk } from '../speech/chunker';
 import type { SpeakOptions } from '../speech/engine';
 import type { NarratorState } from '../speech/narrator';
 import type { Chapter, Position } from '../types';
-import { chunkIndexAtTime, offsetAtTime, timeAtOffset } from './timing';
-import type { ChapterAudio, ChunkTiming } from './types';
-import { audioKey } from './types';
-import { encodeWav } from './wav';
+import { offsetAtTime, timeAtOffset } from './timing';
+import type { ChapterAudioMeta, ChunkTiming } from './types';
+import { partRanges } from './types';
+import { concatWavs, decodeWavInfo, encodeWav } from './wav';
 
 export interface AudioNarratorDeps {
   bookId: string;
   chapters: Chapter[];
-  getMeta(key: string): Promise<Omit<ChapterAudio, 'wav'> | undefined>;
+  /** Everything cached for a chapter: its parts, or one older whole-chapter file. */
+  getChapterAudio(chapter: number): Promise<ChapterAudioMeta[]>;
   getWav(key: string): Promise<ArrayBuffer | undefined>;
-  /** Ask for chapters to be generated (first = most urgent). */
-  requestAudio(chapters: number[]): void;
+  /** Ask for chapters to be generated (first = most urgent; `startOffset` = where in it the listener is). */
+  requestAudio(chapters: number[], startOffset?: number): void;
   /** For tests. */
   createAudio?: () => HTMLAudioElement;
 }
@@ -38,7 +39,8 @@ export class AudioNarrator implements PlaybackController {
   private state: NarratorState;
   private audio: HTMLAudioElement;
   private url: string | null = null;
-  private loaded = -1;
+  /** The audio in the player: one chapter's consecutive parts [from, to] of `parts`. */
+  private run: { chapter: number; from: number; to: number; parts: number; firstChunk: number; lastChunk: number } | null = null;
   private loading: Promise<boolean> | null = null;
   private timings: ChunkTiming[] = [];
   private chunkCache = new Map<number, Chunk[]>();
@@ -91,7 +93,7 @@ export class AudioNarrator implements PlaybackController {
     if (this.destroyed) return;
     if (this.state.status === 'ended') this.seek({ chapter: 0, offset: 0 });
     this.wantPlay = true;
-    if (this.loaded === this.state.chapter) {
+    if (this.covers(this.state.chapter, this.state.offset)) {
       this.startAudio();
       return;
     }
@@ -118,7 +120,7 @@ export class AudioNarrator implements PlaybackController {
     const offset = Math.max(0, Math.min(pos.offset, this.deps.chapters[chapter].text.length));
     this.set({ chapter, chunks, offset, chunkIndex: chunkAt(chunks, offset), notice: null, status: autoplay ? 'playing' : this.state.status === 'idle' ? 'idle' : 'paused' });
     this.wantPlay = autoplay;
-    if (this.loaded === chapter) {
+    if (this.covers(chapter, offset)) {
       this.audio.currentTime = timeAtOffset(this.timings, offset);
       if (autoplay) this.startAudio();
       else this.audio.pause();
@@ -138,11 +140,18 @@ export class AudioNarrator implements PlaybackController {
   }
 
   skipSeconds(seconds: number) {
-    if (this.loaded !== this.state.chapter) return;
+    const run = this.run;
+    if (!run || run.chapter !== this.state.chapter) return;
     const t = this.audio.currentTime + seconds;
-    if (t < 0 && this.state.chapter > 0 && this.audio.currentTime < 1) return this.seek({ chapter: this.state.chapter - 1, offset: Number.MAX_SAFE_INTEGER });
-    if (t >= (this.audio.duration || 0) && this.state.chapter < this.deps.chapters.length - 1) return this.nextChapter();
-    this.audio.currentTime = Math.max(0, Math.min(t, this.audio.duration || t));
+    const end = this.audio.duration || 0;
+    if (t < 0 && run.from === 0 && this.state.chapter > 0 && this.audio.currentTime < 1) return this.seek({ chapter: this.state.chapter - 1, offset: Number.MAX_SAFE_INTEGER });
+    if (t >= end && run.to < run.parts - 1) {
+      // The rest of the chapter is still being made: go to the end of what's ready.
+      this.audio.currentTime = Math.max(0, end - 0.05);
+      return this.onTime();
+    }
+    if (t >= end && this.state.chapter < this.deps.chapters.length - 1) return this.nextChapter();
+    this.audio.currentTime = Math.max(0, Math.min(t, end || t));
     this.onTime();
   }
 
@@ -198,15 +207,22 @@ export class AudioNarrator implements PlaybackController {
     this.listeners.clear();
   }
 
-  /** Called when the generation queue finishes a chapter. */
+  /** Called when the generation queue has made more of a chapter. */
   audioReady(chapter: number) {
-    if (chapter !== this.state.chapter || this.loaded === chapter) return;
+    if (chapter !== this.state.chapter || (this.covers(chapter, this.state.offset) && !this.state.waitingForAudio)) return;
     void this.ensureLoaded(chapter).then((ok) => ok && this.wantPlay && this.state.chapter === chapter && this.startAudio());
   }
 
-  /** True when the current chapter's audio is loaded and playable. */
+  /** True when the audio at the current position is loaded and playable. */
   get chapterReady() {
-    return this.loaded === this.state.chapter;
+    return this.covers(this.state.chapter, this.state.offset);
+  }
+
+  private covers(chapter: number, offset: number) {
+    const r = this.run;
+    if (!r || r.chapter !== chapter) return false;
+    const i = chunkAt(this.chunksFor(chapter), offset);
+    return i >= r.firstChunk && i <= r.lastChunk;
   }
 
   // ---- internals ------------------------------------------------------------------
@@ -252,31 +268,76 @@ export class AudioNarrator implements PlaybackController {
   }
 
   private ensureLoaded(chapter: number): Promise<boolean> {
-    if (this.loaded === chapter) return Promise.resolve(true);
+    if (this.covers(chapter, this.state.offset)) return Promise.resolve(true);
     const run = async () => {
-      const key = audioKey(this.deps.bookId, chapter);
-      const meta = await this.deps.getMeta(key);
-      const wav = meta && (await this.deps.getWav(key));
+      if (this.covers(chapter, this.state.offset)) return true;
+      const metas = await this.deps.getChapterAudio(chapter);
       if (this.destroyed || chapter !== this.state.chapter) return false;
-      if (!meta || !wav) {
-        this.deps.requestAudio([chapter, chapter + 1].filter((c) => c < this.deps.chapters.length));
-        this.set({ waitingForAudio: true, time: 0, duration: 0 });
+      const chunks = this.chunksFor(chapter);
+      const legacy = metas.find((m) => m.part === undefined);
+      // Which parts to play: the one at the listener's position plus the ready parts around it.
+      let parts: ChapterAudioMeta[];
+      let ranges: Array<[number, number]>;
+      if (legacy) {
+        parts = [legacy];
+        ranges = [[0, chunks.length]];
+      } else {
+        ranges = partRanges(chunks.length);
+        if (!ranges.length) ranges.push([0, 0]);
+        const byPart = new Map(metas.filter((m) => m.parts === ranges.length).map((m) => [m.part!, m]));
+        const at = chunkAt(chunks, this.state.offset);
+        const target = Math.max(0, ranges.findIndex(([a, b]) => at >= a && at < b));
+        if (!byPart.has(target)) {
+          this.deps.requestAudio([chapter, chapter + 1].filter((c) => c < this.deps.chapters.length), this.state.offset);
+          this.set({ waitingForAudio: true });
+          return false;
+        }
+        let from = target;
+        let to = target;
+        while (byPart.has(from - 1)) from--;
+        while (byPart.has(to + 1)) to++;
+        parts = [];
+        for (let p = from; p <= to; p++) parts.push(byPart.get(p)!);
+      }
+      const wavs = await Promise.all(parts.map((m) => this.deps.getWav(m.key)));
+      if (this.destroyed || chapter !== this.state.chapter) return false;
+      if (wavs.some((w) => !w)) {
+        this.deps.requestAudio([chapter], this.state.offset);
+        this.set({ waitingForAudio: true });
         return false;
       }
+      // Join the parts and shift each part's timings to its place in the joined audio.
+      const timings: ChunkTiming[] = [];
+      let t = 0;
+      parts.forEach((m, i) => {
+        for (const c of m.timings) timings.push({ ...c, t0: c.t0 + t, t1: c.t1 + t });
+        t += decodeWavInfo(wavs[i]!).duration;
+      });
+      const from = legacy ? 0 : parts[0].part!;
+      const to = legacy ? 0 : parts[parts.length - 1].part!;
+      const total = legacy ? 1 : ranges.length;
       if (this.url) URL.revokeObjectURL(this.url);
-      this.url = URL.createObjectURL(new Blob([wav], { type: 'audio/wav' }));
-      this.timings = meta.timings;
+      this.url = URL.createObjectURL(new Blob([concatWavs(wavs as ArrayBuffer[])], { type: 'audio/wav' }));
+      this.timings = timings;
       this.pendingSeekTime = timeAtOffset(this.timings, this.state.offset);
       // Swap the source before marking it loaded, so the 'pause' this fires isn't taken as the user pausing.
       this.audio.src = this.url;
-      this.loaded = chapter;
+      this.run = {
+        chapter,
+        from,
+        to,
+        parts: total,
+        firstChunk: legacy ? 0 : ranges[from][0],
+        lastChunk: legacy ? Math.max(0, chunks.length - 1) : Math.max(ranges[from][0], ranges[to][1] - 1),
+      };
       this.audio.playbackRate = this.rate;
       this.audio.currentTime = this.pendingSeekTime;
-      this.set({ waitingForAudio: false, duration: meta.duration, time: this.pendingSeekTime });
-      // Generate two chapters ahead: generation pauses while the phone is locked, so the
-      // next chapter must already exist for playback to continue on the Lock Screen.
+      this.set({ waitingForAudio: false, duration: t, time: this.pendingSeekTime });
+      // Keep generating: the rest of this chapter, then two chapters ahead. Generation pauses while
+      // the phone is locked, so the next chapter must already exist for playback to continue there.
       const ahead = [chapter + 1, chapter + 2].filter((c) => c < this.deps.chapters.length);
-      if (ahead.length) this.deps.requestAudio(ahead);
+      if (to < total - 1) this.deps.requestAudio([chapter, ...ahead]);
+      else if (ahead.length) this.deps.requestAudio(ahead);
       return true;
     };
     const p = (this.loading ?? Promise.resolve(false)).then(run, run);
@@ -285,7 +346,7 @@ export class AudioNarrator implements PlaybackController {
   }
 
   private onTime = () => {
-    if (this.loaded !== this.state.chapter) return;
+    if (this.run?.chapter !== this.state.chapter) return;
     const t = this.audio.currentTime;
     // Some browsers report 0 before applying a seek on a fresh source.
     if (this.pendingSeekTime !== null) {
@@ -293,13 +354,24 @@ export class AudioNarrator implements PlaybackController {
       this.pendingSeekTime = null;
     }
     const offset = offsetAtTime(this.timings, t);
-    const chunkIndex = Math.min(chunkIndexAtTime(this.timings, t), this.state.chunks.length - 1);
+    const chunkIndex = chunkAt(this.state.chunks, offset);
     if (offset !== this.state.offset || chunkIndex !== this.state.chunkIndex || Math.abs((this.state.time ?? 0) - t) > 0.25)
       this.set({ offset, chunkIndex, time: t, duration: this.audio.duration || this.state.duration });
   };
 
   private onEnded = () => {
-    if (this.loaded !== this.state.chapter) return;
+    const run = this.run;
+    if (run?.chapter !== this.state.chapter) return;
+    if (run.to < run.parts - 1) {
+      // More of this chapter is coming: continue with the next part (or wait for it to be made).
+      const chunks = this.chunksFor(run.chapter);
+      const nextChunk = chunks[run.lastChunk + 1];
+      if (nextChunk) {
+        this.set({ offset: nextChunk.start, chunkIndex: run.lastChunk + 1, status: 'playing' });
+        void this.ensureLoaded(run.chapter).then((ok) => ok && this.wantPlay && this.state.chapter === run.chapter && this.startAudio());
+        return;
+      }
+    }
     const next = this.state.chapter + 1;
     if (next >= this.deps.chapters.length) {
       this.wantPlay = false;
@@ -317,13 +389,13 @@ export class AudioNarrator implements PlaybackController {
 
   // Keep state in sync when the Lock Screen, headphones or the OS pause/resume playback.
   private onPauseEvent = () => {
-    if (this.audio.ended || !this.wantPlay || this.loaded !== this.state.chapter) return;
+    if (this.audio.ended || !this.wantPlay || !this.chapterReady) return;
     this.wantPlay = false;
     this.set({ status: 'paused' });
   };
 
   private onPlayEvent = () => {
-    if (this.loaded !== this.state.chapter) return;
+    if (!this.chapterReady) return;
     this.wantPlay = true;
     if (this.state.status !== 'playing') this.set({ status: 'playing', notice: null });
   };
