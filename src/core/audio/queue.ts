@@ -27,7 +27,7 @@ export interface QueueDeps {
   chapterText(bookId: string, chapter: number): Promise<string | undefined>;
   voiceFor(bookId: string): Promise<string>;
   /** Pauses and pronunciations to use; changing them makes chapters regenerate when requested. */
-  options?(): Promise<Pick<GenerateOptions, 'sentencePause' | 'paragraphPause' | 'pronunciations'>>;
+  options?(bookId: string): Promise<Pick<GenerateOptions, 'sentencePause' | 'paragraphPause' | 'pronunciations'>>;
   /** Everything cached for a chapter (parts, or one older whole-chapter file). */
   chapterAudio(bookId: string, chapter: number): Promise<ChapterAudioMeta[]>;
   putAudio(a: ChapterAudio): Promise<void>;
@@ -148,7 +148,7 @@ export class AudioQueue {
     }
     const engine = this.deps.engine();
     const voice = await this.deps.voiceFor(bookId);
-    const extra = (await this.deps.options?.()) ?? {};
+    const extra = (await this.deps.options?.(bookId)) ?? {};
     // The cache key covers the text and the narration settings that change the audio.
     const hash = textHash(`${text}\u0000${JSON.stringify(extra)}`);
     const matches = (m: ChapterAudioMeta) => m.voice === voice && m.engine === engine.id && m.textHash === hash;

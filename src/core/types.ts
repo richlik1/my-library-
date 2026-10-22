@@ -36,7 +36,7 @@ export interface Book {
   ocr?: OcrReport;
   favorite?: boolean;
   /** How this book is narrated: live device speech, or generated natural-voice audio. */
-  narration?: { engine: 'device' | 'kokoro'; voice?: string };
+  narration?: { engine: 'device' | 'kokoro'; voice?: string; pause?: PauseLength; presetId?: string };
 }
 
 export interface BookContent {
@@ -88,6 +88,20 @@ export interface Annotation {
 
 export type HighlightColor = 'gold' | 'rose' | 'mint' | 'sky';
 
+export type PauseLength = 'short' | 'normal' | 'long';
+
+/** A saved way of listening: engine, voice, speed and pauses. */
+export interface NarratorPreset {
+  id: string;
+  name: string;
+  /** 'kokoro' = natural voice (works with the screen locked); 'device' = built-in voices. */
+  engine: 'device' | 'kokoro';
+  /** Natural voice id (Kokoro), when engine is 'kokoro'. */
+  voice?: string;
+  rate: number;
+  pause: PauseLength;
+}
+
 export interface Settings {
   voiceURI: string | null;
   rate: number;
@@ -102,9 +116,15 @@ export interface Settings {
   showNoveltyVoices: boolean;
   categories: string[];
   /** Natural voice: pause length between sentences/paragraphs. */
-  narrationPause: 'short' | 'normal' | 'long';
+  narrationPause: PauseLength;
   /** Natural voice: words to say differently, e.g. { word: 'StayOps', say: 'Stay Ops' }. */
   pronunciations: Array<{ word: string; say: string }>;
+  /** Narrator presets you created (built-in ones are in the app). */
+  presets: NarratorPreset[];
+  /** Colour theme. */
+  theme: 'system' | 'dark' | 'light';
+  /** Discover suggests books from your own listening history. */
+  personalizedDiscover: boolean;
   /** Bumped when new default categories are added, so existing lists get them once. */
   categoriesVersion?: number;
 }
@@ -131,6 +151,9 @@ export const DEFAULT_SETTINGS: Settings = {
   keepAwake: true,
   narrationPause: 'normal',
   pronunciations: [],
+  presets: [],
+  theme: 'system',
+  personalizedDiscover: true,
   showNoveltyVoices: false,
   categories: DEFAULT_CATEGORIES,
 };

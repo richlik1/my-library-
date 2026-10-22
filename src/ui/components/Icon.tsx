@@ -31,6 +31,14 @@ const paths: Record<string, string> = {
   text: 'M4 7V5h16v2M9 19h6M12 5v14',
   speed: 'M12 21a9 9 0 1 1 9-9M12 12l5-4',
   shield: 'M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z',
+  home: 'M4 11l8-7 8 7v9a1 1 0 0 1-1 1h-4v-6h-6v6H5a1 1 0 0 1-1-1z',
+  library: 'M5 4h3v16H5zM10 4h3v16h-3zM15.2 5.2l2.9-.8 3.6 15-2.9.8z',
+  compass: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM15.5 8.5l-2 5-5 2 2-5z',
+  chart: 'M4 20h16M7 16v-5M12 16V7M17 16v-8',
+  user: 'M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 21a8 8 0 0 1 16 0',
+  headphones: 'M4 15v-3a8 8 0 0 1 16 0v3M4 15h3v6H5a1 1 0 0 1-1-1zM20 15h-3v6h2a1 1 0 0 0 1-1z',
+  sparkle: 'M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8zM19 16l.8 2.2L22 19l-2.2.8L19 22l-.8-2.2L16 19l2.2-.8z',
+  chevronDown: 'M5 9l7 7 7-7',
 };
 
 const filled = new Set(['play', 'pause', 'prevChapter', 'nextChapter']);

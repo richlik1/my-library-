@@ -1,17 +1,15 @@
-import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react';
+import { useCallback, useEffect, useState, type CSSProperties } from 'react';
 import type { Chunk } from '../../core/speech/chunker';
 import type { VoiceInfo } from '../../core/speech/engine';
 import { isIOS } from '../../core/speech/webSpeechEngine';
-import { deleteAnnotation, getBook, getContent, getProgress, listAnnotations, saveAnnotation } from '../../core/storage/db';
-import type { Annotation, Book, Chapter, HighlightColor, Position } from '../../core/types';
-import { isSequenceEngine } from '../../core/speech/engine';
+import { deleteAnnotation, listAnnotations, saveAnnotation } from '../../core/storage/db';
+import type { Annotation, HighlightColor } from '../../core/types';
 import { speechEngine } from '../engine';
 import { isNativeApp } from '../platform';
 import { useSettings } from '../hooks/settings';
 import { useToast } from '../hooks/toast';
-import { usePlayback } from '../hooks/usePlayback';
+import { usePlaybackSession } from '../hooks/playbackSession';
 import { goBack, navigate } from '../hooks/useRoute';
-import { pickDefaultVoice, useVoices } from '../hooks/useVoices';
 import { BookDetailsSheet } from './BookDetailsSheet';
 import { NarrationPanel, useAudioJobs, useReadyChapters } from './NarrationPanel';
 import { DEFAULT_KOKORO_VOICE, KOKORO_VOICES } from '../../core/audio/kokoroEngine';
@@ -19,58 +17,39 @@ import { Icon } from './Icon';
 import { AnnotationsSheet, COLORS, ChaptersSheet, NoteSheet, SleepSheet, VoiceSheet, swatch } from './PlayerSheets';
 import { Reader, type TextRange } from './Reader';
 
-interface Loaded {
-  book: Book;
-  chapters: Chapter[];
-  start: Position;
-  annotations: Annotation[];
-}
-
 export function Player({ id, autoplay }: { id: string; autoplay: boolean }) {
-  const [data, setData] = useState<Loaded | null | 'missing'>(null);
+  const pb = usePlaybackSession();
+  const [missing, setMissing] = useState(false);
   const { loaded } = useSettings();
 
   useEffect(() => {
     let alive = true;
-    (async () => {
-      const [book, content, progress, annotations] = await Promise.all([getBook(id), getContent(id), getProgress(id), listAnnotations(id)]);
-      if (!alive) return;
-      if (!book || !content) return setData('missing');
-      let start = progress && !progress.finished ? { chapter: progress.chapter, offset: progress.offset } : { chapter: 0, offset: 0 };
-      // The iOS app also saves the position natively, which survives the app
-      // being closed while narrating in the background. Use whichever is newer.
-      if (isSequenceEngine(speechEngine)) {
-        const native = await speechEngine.getSavedPosition(id);
-        if (native && native.updatedAt > (progress?.updatedAt ?? 0) && native.chapter < content.chapters.length)
-          start = { chapter: native.chapter, offset: native.offset };
-      }
-      if (!alive) return;
-      setData({ book, chapters: content.chapters, start, annotations });
-    })().catch(() => alive && setData('missing'));
+    void pb.open(id).then((r) => alive && setMissing(r === 'missing'));
     return () => {
       alive = false;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
-  if (data === 'missing')
+  if (missing)
     return (
       <div className="page">
         <div className="empty">
           <h2>Book not found</h2>
           <p>It may have been deleted.</p>
           <button className="btn btn-primary" onClick={() => navigate('/')}>
-            Back to library
+            Back to Home
           </button>
         </div>
       </div>
     );
-  if (!data || !loaded)
+  if (!loaded || pb.session?.book.id !== id || !pb.narrator || !pb.state)
     return (
       <div className="page" style={{ display: 'grid', placeItems: 'center', height: '100dvh' }}>
         <div className="spinner" />
       </div>
     );
-  return <PlayerView key={data.book.id} data={data} autoplay={autoplay} />;
+  return <PlayerView key={id} autoplay={autoplay} />;
 }
 
 type Popover = { kind: 'chunk'; chunk: Chunk; rect: DOMRect } | { kind: 'selection'; range: TextRange; rect: DOMRect } | null;
@@ -84,22 +63,22 @@ function fmt(sec: number) {
   return h ? `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}` : `${m}:${String(s).padStart(2, '0')}`;
 }
 
-function PlayerView({ data, autoplay }: { data: Loaded; autoplay: boolean }) {
+function PlayerView({ autoplay }: { autoplay: boolean }) {
   const { settings, update } = useSettings();
   const toast = useToast();
-  const voices = useVoices(speechEngine);
-  const [book, setBook] = useState(data.book);
-  const { chapters } = data;
-  const voiceId = useMemo(() => {
-    if (settings.voiceURI && voices.some((v) => v.id === settings.voiceURI)) return settings.voiceURI;
-    return pickDefaultVoice(voices)?.id ?? null;
-  }, [settings.voiceURI, voices]);
+  const pb = usePlaybackSession();
+  const { voices, voiceId, narrator, state } = pb;
+  const book = pb.session!.book;
+  const chapters = pb.session!.chapters;
+  const setBook = pb.setBook;
   const mode = book.narration?.engine ?? 'device';
-  const { narrator, state } = usePlayback(book, chapters, data.start, voiceId, mode);
   const jobs = useAudioJobs(book.id);
   const kokoroVoice = book.narration?.voice ?? DEFAULT_KOKORO_VOICE;
   const readyChapters = useReadyChapters(book.id, kokoroVoice, jobs);
-  const [annotations, setAnnotations] = useState<Annotation[]>(data.annotations);
+  const [annotations, setAnnotations] = useState<Annotation[]>([]);
+  useEffect(() => {
+    void listAnnotations(book.id).then(setAnnotations);
+  }, [book.id]);
   const [popover, setPopover] = useState<Popover>(null);
   const [sheet, setSheet] = useState<SheetName>(null);
   const [noteDraft, setNoteDraft] = useState<{ range: TextRange; chapter: number; existing?: Annotation } | null>(null);
@@ -138,7 +117,6 @@ function PlayerView({ data, autoplay }: { data: Loaded; autoplay: boolean }) {
   const refreshAnnotations = useCallback(async () => setAnnotations(await listAnnotations(book.id)), [book.id]);
 
   if (!narrator || !state) return null;
-
   const chapter = chapters[state.chapter];
   const audioMode = narrator.kind === 'audio';
   const chapterJob = jobs.find((j) => j.chapter === state.chapter);
@@ -195,8 +173,8 @@ function PlayerView({ data, autoplay }: { data: Loaded; autoplay: boolean }) {
   return (
     <div className="player">
       <header className="player-top">
-        <button className="icon-btn" onClick={goBack} aria-label="Back to library">
-          <Icon name="chevronLeft" />
+        <button className="icon-btn" onClick={goBack} aria-label="Close player">
+          <Icon name="chevronDown" />
         </button>
         <button className="player-title" onClick={() => setSheet('chapters')}>
           <div className="bt">{book.title}</div>
@@ -479,7 +457,15 @@ function PlayerView({ data, autoplay }: { data: Loaded; autoplay: boolean }) {
         />
       )}
       {sheet === 'details' && (
-        <BookDetailsSheet book={book} onClose={() => setSheet(null)} onSaved={setBook} onDeleted={() => navigate('/')} />
+        <BookDetailsSheet
+          book={book}
+          onClose={() => setSheet(null)}
+          onSaved={setBook}
+          onDeleted={() => {
+            pb.close();
+            navigate('/');
+          }}
+        />
       )}
       {noteDraft && (
         <NoteSheet

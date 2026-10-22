@@ -1,7 +1,10 @@
 import { useEffect, useState } from 'react';
 
 export type Route =
+  | { name: 'home' }
   | { name: 'library' }
+  | { name: 'discover' }
+  | { name: 'progress' }
   | { name: 'book'; id: string; autoplay: boolean }
   | { name: 'settings' }
   | { name: 'growth' }
@@ -16,6 +19,9 @@ function parse(hash: string): Route {
   const [first, second] = path.split('/');
   if (first === 'book' && second) return { name: 'book', id: decodeURIComponent(second), autoplay: query.split('&').includes('play') };
   if (first === 'settings') return { name: 'settings' };
+  if (first === 'library') return { name: 'library' };
+  if (first === 'discover') return { name: 'discover' };
+  if (first === 'progress') return { name: 'progress' };
   if (first === 'growth') {
     const third = path.split('/')[2];
     if (second === 'book' && third) return { name: 'growth-book', id: decodeURIComponent(third) };
@@ -25,7 +31,7 @@ function parse(hash: string): Route {
     return { name: 'growth' };
   }
   if (first === 'mentor') return { name: 'mentor', flow: second ? decodeURIComponent(second) : undefined };
-  return { name: 'library' };
+  return { name: 'home' };
 }
 
 /** Hash routing works from any URL path and offline, with no server config. */

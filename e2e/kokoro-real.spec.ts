@@ -79,7 +79,7 @@ test('real Kokoro voice generates and plays a chapter in the browser', async ({ 
   await expect(page.getByText(/2 of 2 chapters ready/)).toBeVisible({ timeout: 9 * 60_000 });
   const secondSeconds = (Date.now() - t1) / 1000;
   const genSeconds = firstSeconds;
-  await page.getByRole('button', { name: 'Close' }).click();
+  await page.getByRole('button', { name: 'Close', exact: true }).click();
   await page.getByTestId('play').click();
   await expect.poll(async () => (await page.locator('.scrub span').first().textContent())?.trim(), { timeout: 20_000 }).not.toBe('0:00');
   const remaining = (await page.locator('.scrub span').last().textContent())?.trim();
@@ -104,7 +104,7 @@ test('real Kokoro: time from Play to first sound on a long chapter', async ({ pa
   await page.getByRole('button', { name: 'Open long' }).click();
   await page.getByRole('button', { name: /Voice/ }).click();
   await page.getByRole('radio', { name: 'Natural voice' }).click();
-  await page.getByRole('button', { name: 'Close' }).click();
+  await page.getByRole('button', { name: 'Close', exact: true }).click();
   const t0 = Date.now();
   await page.getByTestId('play').click();
   await expect.poll(async () => (await page.locator('.scrub span').first().textContent())?.trim(), { timeout: 9 * 60_000 }).not.toBe('0:00');

@@ -45,7 +45,7 @@ async function openBookWithNaturalVoice(page: Page) {
   await page.getByRole('button', { name: /Voice/ }).click();
   await page.getByRole('radio', { name: 'Natural voice' }).click();
   await expect(page.getByText(/of 2 chapters ready/)).toBeVisible();
-  await page.getByRole('button', { name: 'Close' }).click();
+  await page.getByRole('button', { name: 'Close', exact: true }).click();
 }
 
 const timeShown = async (page: Page) => (await page.locator('.scrub span').first().textContent())?.trim();
@@ -94,7 +94,7 @@ test('natural voice: plays through to the next chapter by itself', async ({ page
   await page.getByRole('button', { name: /Voice/ }).click();
   await page.getByRole('button', { name: 'Generate whole book' }).click();
   await expect(page.getByText(/2 of 2 chapters ready/)).toBeVisible({ timeout: 15_000 });
-  await page.getByRole('button', { name: 'Close' }).click();
+  await page.getByRole('button', { name: 'Close', exact: true }).click();
   await page.getByTestId('play').click();
   // Chapter 1 is about 3 s long; it should roll into chapter 2 without a tap.
   await expect(page.locator('.player-title .ct')).toContainText('Chapter 2', { timeout: 15_000 });
@@ -145,7 +145,7 @@ test('natural voice: a long chapter starts playing after its first sentences and
   await page.getByRole('button', { name: 'Open long' }).click();
   await page.getByRole('button', { name: /Voice/ }).click();
   await page.getByRole('radio', { name: 'Natural voice' }).click();
-  await page.getByRole('button', { name: 'Close' }).click();
+  await page.getByRole('button', { name: 'Close', exact: true }).click();
   await page.getByTestId('play').click();
   // Playing begins while the chapter is still being made.
   await expect.poll(() => timeShown(page), { timeout: 10_000 }).not.toBe('0:00');

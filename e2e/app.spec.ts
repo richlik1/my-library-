@@ -60,7 +60,7 @@ test('upload a PDF, read it aloud, pause and resume where I stopped', async ({ p
 
   // The library shows progress and "continue listening".
   await page.getByRole('button', { name: 'Pause' }).click();
-  await page.getByRole('button', { name: 'Back to library' }).click();
+  await page.getByRole('button', { name: 'Close player' }).click();
   await expect(page.getByText('Continue listening')).toBeVisible();
   await expect(page.locator('.hero-eyebrow')).toContainText('% complete');
 });
@@ -69,9 +69,9 @@ test('voice and speed changes are applied to narration', async ({ page }) => {
   await importSample(page);
   await page.getByRole('button', { name: 'Open The Lighthouse Keeper' }).click();
   await page.getByRole('button', { name: /Voice/ }).click();
-  await page.getByRole('button', { name: '1.5×' }).click();
+  await page.getByRole('button', { name: '1.5×', exact: true }).click();
   await page.getByRole('button', { name: /^Daniel/ }).click();
-  await page.getByRole('button', { name: 'Close' }).click();
+  await page.getByRole('button', { name: 'Close', exact: true }).click();
   await page.getByTestId('play').click();
   await expect.poll(() => spoken(page)).toHaveLength(1);
   const u = await page.evaluate(() => {

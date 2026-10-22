@@ -166,6 +166,27 @@ export function SettingsPage() {
       </section>
 
       <section className="card">
+        <h3>Appearance</h3>
+        <div className="seg-nav" role="radiogroup" aria-label="Theme">
+          {(['system', 'dark', 'light'] as const).map((t) => (
+            <a
+              key={t}
+              href="#"
+              role="radio"
+              aria-checked={settings.theme === t}
+              className={settings.theme === t ? 'active' : ''}
+              onClick={(e) => {
+                e.preventDefault();
+                update({ theme: t });
+              }}
+            >
+              {t === 'system' ? 'Match device' : t === 'dark' ? 'Dark' : 'Light'}
+            </a>
+          ))}
+        </div>
+      </section>
+
+      <section className="card">
         <h3>Reading &amp; listening</h3>
         <div className="rate-row">
           <div className="rate-head">
@@ -211,7 +232,7 @@ export function SettingsPage() {
       <section className="card">
         <h3>Natural voice</h3>
         <div className="rate-head" style={{ marginBottom: 6 }}>
-          <span>Pauses between sentences</span>
+          <span>Default pauses between sentences</span>
         </div>
         <div className="seg-nav" role="radiogroup" aria-label="Pauses between sentences">
           {(['short', 'normal', 'long'] as const).map((p) => (
@@ -275,6 +296,27 @@ export function SettingsPage() {
         <p className="small muted" style={{ marginTop: 10, marginBottom: 0 }}>
           Changes apply to chapters made from now on. Use “Regenerate this chapter” in Voice &amp; speed to remake one you already have.
         </p>
+        {settings.presets.length > 0 && (
+          <>
+            <div className="rate-head" style={{ margin: '14px 0 6px' }}>
+              <span>Your presets</span>
+            </div>
+            <ul className="list" aria-label="Your presets">
+              {settings.presets.map((p) => (
+                <li key={p.id}>
+                  <div className="list-row">
+                    <span className="grow">
+                      <strong>{p.name}</strong> · {p.rate}× · {p.pause} pauses
+                    </span>
+                    <button className="icon-btn" aria-label={`Delete preset ${p.name}`} onClick={() => update({ presets: settings.presets.filter((x) => x.id !== p.id) })}>
+                      <Icon name="trash" size={16} />
+                    </button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
         <div className="row" style={{ marginTop: 14, alignItems: 'center' }}>
           <button className="btn" onClick={runBench} disabled={bench?.busy}>
             {bench?.busy ? 'Testing…' : 'Test natural voice speed'}

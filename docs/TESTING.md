@@ -1,7 +1,7 @@
 # Test status
 
 **passed** = ran and passed · **failed** · **blocked** = can't run in the available environment · **not run** = could run, hasn't yet.
-Updated 2026-10-22. Environment: Linux, Chromium (Playwright), Node 22. No Mac, no iOS Simulator, no iPhone attached.
+Updated 2026-10-22 (V2 Phase 1). Environment: Linux, Chromium (Playwright), Node 22. No Mac, no iOS Simulator, no iPhone attached.
 
 ## Automated (run with `npm test` and `npm run test:e2e`)
 
@@ -23,6 +23,13 @@ Updated 2026-10-22. Environment: Linux, Chromium (Playwright), Node 22. No Mac, 
 | Kokoro in browser (Chromium, WebAssembly, real model) | Model load, chapter generation and playback | passed (opt-in test `e2e/kokoro-real.spec.ts`) |
 | Kokoro with WebGPU | Faster generation option | blocked (no GPU here) |
 | Growth Library, Mentor | Catalog, quizzes, daily block, weekly review, mentor plans | passed |
+| Natural voice in parts | First sentence first, part by part, resume part first, refill missing parts, joined WAV export | passed |
+| Natural voice (real model) | First sound 12.1 s after Play on first use; speed test 0.2–0.3× here (1 thread) | passed (opt-in) |
+| App navigation (V2) | Four tabs, mini-player, playback across tabs, resume from Home | passed |
+| Narrator presets | One-tap switch, custom preset, remembered after reload | passed |
+| Quick Listen | Saved passages read aloud, own summaries, AI shown unavailable | passed |
+| Discover / Progress / theme | Explained suggestions, toggle off, real counts, light theme persists | passed |
+| VoiceOver, Dynamic Type on iPhone | Screen reader and system text size | not run (needs iPhone) |
 
 ## Measured performance (this environment, not an iPhone)
 
@@ -54,5 +61,9 @@ two generated chapters.
 | 14 | Low storage | Clear error, no data loss |
 | 15 | Voice & speed → Save this chapter’s audio | WAV file can be saved to Files |
 | 16 | Lock the phone while chapters are still generating | Ready chapters play; the app warns that the next one needs the app open |
+| 17 | Settings → Test natural voice speed | Shows model start time and “× listening speed”; please send the result |
+| 18 | Natural voice: press Play on a new chapter | Sound starts after the first sentence is made |
+| 19 | Start a book, switch tabs, lock the phone | Keeps playing; mini-player shows it |
+| 20 | VoiceOver: tabs, mini-player, play/pause | Every control is announced with a clear name |
 
 Report results as passed / failed (with what happened) so this table can be updated.

@@ -4,6 +4,7 @@ import type { Annotation, Book, BookContent, ImportedBook, Progress, Settings, S
 import { DEFAULT_SETTINGS } from '../types';
 import type { DailyBlock, GrowthBookState, GrowthNote, WeeklyReview } from '../../growth/types';
 import type { ChapterAudio } from '../audio/types';
+import type { Summary } from '../summaries';
 import { concatWavs } from '../audio/wav';
 
 /**
@@ -26,6 +27,8 @@ interface LibraryDB extends DBSchema {
   // listing a book's chapters never loads hundreds of MB of audio.
   audio: { key: string; value: Omit<ChapterAudio, 'wav'>; indexes: { byBook: string } };
   audioData: { key: string; value: { key: string; wav: ArrayBuffer } };
+  // Quick Listen summaries (schema v4).
+  summaries: { key: string; value: Summary; indexes: { byBook: string } };
 }
 
 export const GROWTH_STORES = ['growthBooks', 'growthNotes', 'growthDays', 'growthReviews'] as const;
@@ -35,7 +38,7 @@ let dbPromise: Promise<IDBPDatabase<LibraryDB>> | null = null;
 
 export function db(): Promise<IDBPDatabase<LibraryDB>> {
   if (!dbPromise) {
-    dbPromise = openDB<LibraryDB>(DB_NAME, 3, {
+    dbPromise = openDB<LibraryDB>(DB_NAME, 4, {
       upgrade(d, oldVersion) {
         if (oldVersion < 1) {
           d.createObjectStore('books', { keyPath: 'id' });
@@ -56,6 +59,7 @@ export function db(): Promise<IDBPDatabase<LibraryDB>> {
           d.createObjectStore('growthDays', { keyPath: 'date' });
           d.createObjectStore('growthReviews', { keyPath: 'week' });
         }
+        if (oldVersion < 4) d.createObjectStore('summaries', { keyPath: 'id' }).createIndex('byBook', 'bookId');
       },
       blocking() {
         // Another tab upgraded the schema: close so it can proceed.
@@ -128,6 +132,7 @@ export async function updateBook(id: string, patch: Partial<Omit<Book, 'id'>>): 
 
 export async function deleteBook(id: string) {
   await deleteBookAudio(id);
+  await deleteBookSummaries(id);
   const d = await db();
   const tx = d.transaction(['books', 'contents', 'files', 'progress', 'annotations'], 'readwrite');
   await Promise.all([
@@ -283,4 +288,28 @@ export async function deleteBookAudio(bookId: string) {
 export async function audioCacheBytes(): Promise<number> {
   const all = await (await db()).getAll('audio');
   return all.reduce((s, a) => s + 44 + Math.round(a.duration * a.sampleRate) * 2, 0);
+}
+
+// ---- Quick Listen summaries ----------------------------------------------------
+
+export async function listSummaries(bookId: string): Promise<Summary[]> {
+  const all = await (await db()).getAllFromIndex('summaries', 'byBook', bookId);
+  return all.sort((a, b) => b.createdAt - a.createdAt);
+}
+
+export async function saveSummary(s: Summary) {
+  await (await db()).put('summaries', s);
+}
+
+export async function deleteSummary(id: string) {
+  await (await db()).delete('summaries', id);
+}
+
+export async function deleteBookSummaries(bookId: string) {
+  const d = await db();
+  for (const s of await d.getAllFromIndex('summaries', 'byBook', bookId)) await d.delete('summaries', s.id);
+}
+
+export async function listAllAnnotations() {
+  return (await db()).getAll('annotations');
 }

@@ -11,6 +11,8 @@ import { hasWebGPU } from '../../core/audio/kokoroEngine';
 import { audioQueue, kokoroDevice, neuralEngine, setKokoroDevice } from '../narration';
 import { formatBytes } from './BookDetailsSheet';
 import { Icon } from './Icon';
+import { useSettings } from '../hooks/settings';
+import { activePreset, allPresets, choosePreset, newPresetId } from '../presets';
 
 /** Live list of generation jobs for one book. */
 export function useAudioJobs(bookId: string): Job[] {
@@ -74,7 +76,7 @@ export function NarrationPanel({
   }, [book.id, voice, jobs.filter((j) => j.status === 'done').length, deleted]);
 
   const setNarration = async (patch: Partial<NonNullable<Book['narration']>>) => {
-    const narration = { engine: mode, voice, ...patch };
+    const narration = { ...book.narration, engine: mode, voice, ...patch };
     const next = await updateBook(book.id, { narration });
     if (next) onBookChange(next);
   };
@@ -106,6 +108,7 @@ export function NarrationPanel({
 
   return (
     <section style={{ marginBottom: 18 }}>
+      <PresetPicker book={book} onBookChange={onBookChange} />
       <div className="seg-nav" role="radiogroup" aria-label="Narration">
         <a
           href="#"
@@ -295,5 +298,84 @@ export function NarrationPanel({
         </>
       )}
     </section>
+  );
+}
+
+/** One-tap narrator presets (voice, speed, pauses), remembered per book. */
+function PresetPicker({ book, onBookChange }: { book: Book; onBookChange(b: Book): void }) {
+  const { settings, update } = useSettings();
+  const toast = useToast();
+  const [naming, setNaming] = useState(false);
+  const [name, setName] = useState('');
+  const active = activePreset(book, settings);
+  const presets = allPresets(settings);
+  const voiceName = (id?: string) => KOKORO_VOICES.find((v) => v.id === id)?.name ?? 'Device voice';
+
+  const pick = async (id: string) => {
+    const preset = presets.find((p) => p.id === id)!;
+    const { book: next, regenerates } = await choosePreset(book, preset, settings, update);
+    onBookChange(next);
+    toast(
+      regenerates
+        ? `${preset.name}: new voice or pauses, so chapters will be made again in ${voiceName(preset.voice)}’s voice.`
+        : `${preset.name} on. Speed changes never need new audio.`,
+      { ms: 4500 },
+    );
+  };
+
+  const save = () => {
+    const n = name.trim();
+    if (!n) return;
+    const engine = book.narration?.engine ?? 'device';
+    const preset = {
+      id: newPresetId(),
+      name: n,
+      engine,
+      voice: engine === 'kokoro' ? (book.narration?.voice ?? DEFAULT_KOKORO_VOICE) : undefined,
+      rate: settings.rate,
+      pause: book.narration?.pause ?? settings.narrationPause,
+    };
+    update({ presets: [...(settings.presets ?? []), preset] });
+    void updateBook(book.id, { narration: { engine, voice: book.narration?.voice, pause: preset.pause, presetId: preset.id } }).then((b) => b && onBookChange(b));
+    setNaming(false);
+    setName('');
+    toast(`Saved preset “${n}”`);
+  };
+
+  return (
+    <div style={{ marginBottom: 14 }}>
+      <div className="rate-head" style={{ marginBottom: 8 }}>
+        <span>Presets</span>
+      </div>
+      <div className="preset-grid" role="group" aria-label="Narrator presets">
+        {presets.map((p) => (
+          <button key={p.id} className="preset" aria-pressed={active?.id === p.id} onClick={() => pick(p.id)}>
+            <strong>{p.name}</strong>
+            <small>
+              {p.engine === 'kokoro' ? voiceName(p.voice) : 'Device voice'} · {p.rate}× · {p.pause} pauses
+            </small>
+          </button>
+        ))}
+        <button className="preset" onClick={() => setNaming(true)} aria-label="Save current settings as a preset">
+          <strong>+ Save current</strong>
+          <small>voice, speed, pauses</small>
+        </button>
+      </div>
+      {naming && (
+        <form
+          className="row"
+          style={{ marginTop: 8, gap: 8 }}
+          onSubmit={(e) => {
+            e.preventDefault();
+            save();
+          }}
+        >
+          <input className="input" style={{ flex: 1 }} placeholder="Preset name" aria-label="Preset name" value={name} onChange={(e) => setName(e.target.value)} autoFocus />
+          <button className="btn btn-primary" type="submit" disabled={!name.trim()}>
+            Save
+          </button>
+        </form>
+      )}
+    </div>
   );
 }

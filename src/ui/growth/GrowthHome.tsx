@@ -4,8 +4,8 @@ import { CATALOG } from '../../growth/catalog';
 import { STATUS_LABEL, isBlockComplete, isoWeek, localDate, pickFocusBook, searchCatalog, streak, weekStats } from '../../growth/plan';
 import type { CatalogBook, CategoryId, ReadingStatus } from '../../growth/types';
 import { Cover } from '../components/Cover';
+import { Icon } from '../components/Icon';
 import { navigate } from '../hooks/useRoute';
-import { SectionNav } from './SectionNav';
 import { useGrowth, type GrowthData } from './useGrowth';
 
 export function GrowthHome() {
@@ -21,6 +21,9 @@ export function GrowthHome() {
   return (
     <div className="page">
       <header className="topbar">
+        <a className="icon-btn" href="#/discover" aria-label="Back to Discover">
+          <Icon name="chevronLeft" />
+        </a>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div className="eyebrow">LYONS AI</div>
           <h1 style={{ fontSize: 28 }}>Growth Library</h1>
@@ -29,7 +32,6 @@ export function GrowthHome() {
           Notes &amp; plans
         </button>
       </header>
-      <SectionNav active="growth" />
 
       {g.loaded && <Overview g={g} />}
 

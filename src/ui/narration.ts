@@ -88,9 +88,11 @@ export const audioQueue = new AudioQueue({
   chapterAudio: getChapterAudio,
   putAudio,
   deleteAudio,
-  options: async () => {
-    const s = await getSettings();
-    const pauses = { short: [0.1, 0.35], normal: [0.18, 0.55], long: [0.3, 0.9] }[s.narrationPause] ?? [0.18, 0.55];
+  options: async (bookId) => {
+    const [s, book] = await Promise.all([getSettings(), getBook(bookId)]);
+    // Pauses can be set per book (narrator presets); otherwise the Settings default.
+    const pause = book?.narration?.pause ?? s.narrationPause;
+    const pauses = { short: [0.1, 0.35], normal: [0.18, 0.55], long: [0.3, 0.9] }[pause] ?? [0.18, 0.55];
     const pronunciations = Object.fromEntries(s.pronunciations.filter((p) => p.word.trim() && p.say.trim()).map((p) => [p.word.trim(), p.say.trim()]));
     return { sentencePause: pauses[0], paragraphPause: pauses[1], ...(Object.keys(pronunciations).length ? { pronunciations } : {}) };
   },

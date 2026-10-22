@@ -7,7 +7,8 @@ test.beforeEach(async ({ page }) => {
 
 test('growth library: catalog, search, book study, quiz and actions', async ({ page }) => {
   await page.goto('./');
-  await page.getByRole('link', { name: 'Growth Library' }).click();
+  await page.getByRole('link', { name: 'Discover' }).click();
+  await page.getByRole('link', { name: /^Growth Library/ }).click();
   await expect(page.getByRole('heading', { name: 'Growth Library' })).toBeVisible();
   await expect(page.locator('.g-row')).toHaveCount(21);
   await expect(page.locator('.read-first')).toHaveText('Read first');
@@ -79,7 +80,7 @@ test('mentor builds a tailored conversation plan and saves it', async ({ page })
 
 test('existing audiobook features still work next to the growth library', async ({ page }) => {
   await page.goto('./#/growth');
-  await page.getByRole('link', { name: 'Audiobooks' }).click();
+  await page.getByRole('link', { name: 'Home' }).click();
   await page.getByRole('button', { name: 'Try a sample book' }).click();
   await expect(page.locator('.player-title .bt')).toHaveText('Welcome to My Library');
 });

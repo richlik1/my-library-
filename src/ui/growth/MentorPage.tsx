@@ -7,7 +7,6 @@ import { Icon } from '../components/Icon';
 import { Sheet } from '../components/Sheet';
 import { useToast } from '../hooks/toast';
 import { navigate } from '../hooks/useRoute';
-import { SectionNav } from './SectionNav';
 import { useGrowth, type GrowthData } from './useGrowth';
 
 export function MentorPage({ flowId }: { flowId?: string }) {
@@ -29,6 +28,9 @@ export function MentorPage({ flowId }: { flowId?: string }) {
       ) : (
         <>
           <header className="topbar">
+            <a className="icon-btn" href="#/discover" aria-label="Back to Discover">
+              <Icon name="chevronLeft" />
+            </a>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div className="eyebrow">LYONS AI</div>
               <h1 style={{ fontSize: 28 }}>Mentor</h1>
@@ -37,8 +39,7 @@ export function MentorPage({ flowId }: { flowId?: string }) {
               Your profile
             </button>
           </header>
-          <SectionNav active="mentor" />
-        </>
+            </>
       )}
       {flow ? <FlowRunner key={flow.id} flowId={flow.id} g={g} /> : <FlowList g={g} />}
       {editProfile && g.loaded && <ProfileSheet profile={g.profile} onClose={() => setEditProfile(false)} onSaved={g.refresh} />}
