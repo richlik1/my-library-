@@ -1,4 +1,6 @@
 /// <reference lib="webworker" />
+// Must run first: Safari can't `for await` over download streams, which the model loaders do.
+import '../importers/streamPolyfill';
 /** Runs a Piper voice in a background thread: phonemes with eSpeak (phonemizer), audio with ONNX Runtime. */
 import * as ort from 'onnxruntime-web/webgpu';
 import { phonemize } from 'phonemizer';

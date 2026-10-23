@@ -1,4 +1,6 @@
 /// <reference lib="webworker" />
+// Must run first: Safari can't `for await` over download streams, which the model loaders do.
+import '../importers/streamPolyfill';
 /**
  * Runs Kokoro in a background thread so the app stays responsive while the
  * model loads and audio is generated. Messages: see KokoroWorkerEngine.
