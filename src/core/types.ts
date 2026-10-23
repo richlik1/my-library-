@@ -36,7 +36,7 @@ export interface Book {
   ocr?: OcrReport;
   favorite?: boolean;
   /** How this book is narrated: live device speech, or generated natural-voice audio. */
-  narration?: { engine: 'device' | 'kokoro'; voice?: string; pause?: PauseLength; presetId?: string };
+  narration?: { engine: NarrationEngine; voice?: string; pause?: PauseLength; presetId?: string };
 }
 
 export interface BookContent {
@@ -94,12 +94,18 @@ export type HighlightColor = 'gold' | 'rose' | 'mint' | 'sky';
 
 export type PauseLength = 'short' | 'normal' | 'long';
 
+/**
+ * 'device' = built-in voices (instant; stop when an iPhone locks in Safari).
+ * 'piper' = fast natural voice, 'kokoro' = best natural voice: both make audio
+ * files on the device, which keep playing with the screen locked.
+ */
+export type NarrationEngine = 'device' | 'kokoro' | 'piper';
+
 /** A saved way of listening: engine, voice, speed and pauses. */
 export interface NarratorPreset {
   id: string;
   name: string;
-  /** 'kokoro' = natural voice (works with the screen locked); 'device' = built-in voices. */
-  engine: 'device' | 'kokoro';
+  engine: NarrationEngine;
   /** Natural voice id (Kokoro), when engine is 'kokoro'. */
   voice?: string;
   rate: number;

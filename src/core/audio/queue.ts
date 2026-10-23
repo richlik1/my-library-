@@ -23,7 +23,8 @@ export interface Job {
 }
 
 export interface QueueDeps {
-  engine(): NeuralEngine;
+  /** The engine for a book (books can use different voices). */
+  engine(bookId: string): NeuralEngine | Promise<NeuralEngine>;
   chapterText(bookId: string, chapter: number): Promise<string | undefined>;
   voiceFor(bookId: string): Promise<string>;
   /** Pauses and pronunciations to use; changing them makes chapters regenerate when requested. */
@@ -146,7 +147,7 @@ export class AudioQueue {
       Object.assign(job, { status: 'failed', error: 'Chapter not found' });
       return this.emit();
     }
-    const engine = this.deps.engine();
+    const engine = await this.deps.engine(bookId);
     const voice = await this.deps.voiceFor(bookId);
     const extra = (await this.deps.options?.(bookId)) ?? {};
     // The cache key covers the text and the narration settings that change the audio.

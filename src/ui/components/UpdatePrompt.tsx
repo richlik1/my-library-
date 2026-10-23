@@ -69,6 +69,10 @@ export function UpdatePrompt() {
     <Sheet title={`What’s new in My Library ${__APP_VERSION__}`} onClose={() => setWhatsNew(false)}>
       <ul className="whats-new">
         <li>
+          <strong>New: Fast natural voice.</strong> A lighter voice (Piper) that makes audio several times faster, made for iPhone. In Voice &amp;
+          speed choose <strong>Fast natural</strong>, or test it in Settings → Sound check.
+        </li>
+        <li>
           <strong>Sound fixes:</strong> sound now plays even with Silent mode on (iOS 17 and later). If you still hear nothing, Settings → Sound check
           finds where it stops. If the natural voice fails, the player offers the device voice right away.
         </li>

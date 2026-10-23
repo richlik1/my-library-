@@ -1,0 +1,48 @@
+# Runs the real voice models in a browser (they can't be downloaded in every
+# development environment). Manual, or when the voice code changes.
+name: Voice tests (real models)
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'src/core/audio/**'
+      - 'e2e/piper-real.spec.ts'
+      - 'e2e/kokoro-real.spec.ts'
+      - '.github/workflows/voice-tests.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  voices:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: Download Piper voice (Lessac, medium)
+        run: |
+          d=voices/piper/en/en_US/lessac/medium
+          mkdir -p $d
+          curl -sSfL -o $d/en_US-lessac-medium.onnx https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/lessac/medium/en_US-lessac-medium.onnx
+          curl -sSfL -o $d/en_US-lessac-medium.onnx.json https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/lessac/medium/en_US-lessac-medium.onnx.json
+          ls -la $d
+      - name: Download Kokoro (q8) for comparison
+        run: |
+          d=voices/kokoro
+          mkdir -p $d/onnx
+          for f in config.json tokenizer.json tokenizer_config.json onnx/model_quantized.onnx; do
+            curl -sSfL -o $d/$f https://huggingface.co/onnx-community/Kokoro-82M-v1.0-ONNX/resolve/main/$f
+          done
+      - name: Real voice tests
+        env:
+          PIPER_MODEL_DIR: ${{ github.workspace }}/voices/piper
+          KOKORO_TEST_MODEL_DIR: ${{ github.workspace }}/voices/kokoro
+        run: npx playwright test e2e/piper-real.spec.ts e2e/kokoro-real.spec.ts --project=desktop --reporter=list

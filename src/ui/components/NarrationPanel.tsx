@@ -8,7 +8,8 @@ import { downloadBlob, safeName } from './PlayerSheets';
 import type { Book, Chapter } from '../../core/types';
 import { useToast } from '../hooks/toast';
 import { hasWebGPU } from '../../core/audio/kokoroEngine';
-import { audioQueue, kokoroDevice, neuralEngine, setKokoroDevice } from '../narration';
+import { audioQueue, kokoroDevice, naturalVoiceFor, neuralEngine, setKokoroDevice } from '../narration';
+import { PIPER_VOICES } from '../../core/audio/piper';
 import { formatBytes } from './BookDetailsSheet';
 import { Icon } from './Icon';
 import { useSettings } from '../hooks/settings';
@@ -59,7 +60,8 @@ export function NarrationPanel({
   const toast = useToast();
   const jobs = useAudioJobs(book.id);
   const mode = book.narration?.engine ?? 'device';
-  const voice = book.narration?.voice ?? DEFAULT_KOKORO_VOICE;
+  const voice = naturalVoiceFor(book);
+  const voiceList = mode === 'piper' ? PIPER_VOICES : KOKORO_VOICES;
   const ready = useReadyChapters(book.id, voice, jobs);
   const [usage, setUsage] = useState(0);
   const [preview, setPreview] = useState<{ voice: string; label: string } | null>(null);
@@ -77,16 +79,19 @@ export function NarrationPanel({
   }, [book.id, voice, jobs.filter((j) => j.status === 'done').length, deleted]);
 
   const setNarration = async (patch: Partial<NonNullable<Book['narration']>>) => {
-    const narration = { ...book.narration, engine: mode, voice, ...patch };
+    const engine = patch.engine ?? mode;
+    // Each engine has its own voices: switching engines picks that engine's voice.
+    const nextVoice = patch.voice ?? (engine === mode ? voice : naturalVoiceFor({ ...book, narration: { engine, voice: book.narration?.voice } }));
+    const narration = { ...book.narration, ...patch, engine, voice: nextVoice };
     const next = await updateBook(book.id, { narration });
     if (next) onBookChange(next);
   };
 
   const playPreview = async (id: string) => {
-    const name = KOKORO_VOICES.find((v) => v.id === id)?.name ?? id;
+    const name = voiceList.find((v) => v.id === id)?.name ?? id;
     setPreview({ voice: id, label: 'Preparing…' });
     try {
-      const engine = neuralEngine();
+      const engine = neuralEngine(mode === 'piper' ? 'piper' : 'kokoro');
       await engine.load((_f, label) => setPreview({ voice: id, label }));
       setPreview({ voice: id, label: 'Generating sample…' });
       const r = await engine.synthesize(`Hi, I'm ${name}. I'll read ${book.title} to you.`, id);
@@ -130,6 +135,18 @@ export function NarrationPanel({
         <a
           href="#"
           role="radio"
+          aria-checked={mode === 'piper'}
+          className={mode === 'piper' ? 'active' : ''}
+          onClick={(e) => {
+            e.preventDefault();
+            void setNarration({ engine: 'piper' });
+          }}
+        >
+          Fast natural
+        </a>
+        <a
+          href="#"
+          role="radio"
           aria-checked={mode === 'kokoro'}
           className={mode === 'kokoro' ? 'active' : ''}
           onClick={(e) => {
@@ -143,17 +160,25 @@ export function NarrationPanel({
 
       {mode === 'device' ? (
         <p className="muted small" style={{ marginTop: 0 }}>
-          Instant, using your device’s built-in voices. On iPhone it stops when the screen locks. Choose <strong>Natural voice</strong> to
+          Instant, using your device’s built-in voices. On iPhone it stops when the screen locks. Choose <strong>Fast natural</strong> to
           listen with the screen locked. Highlighting: word by word when your device’s voice reports words, otherwise sentence by sentence.
         </p>
       ) : (
         <>
+          {mode === 'piper' ? (
+            <p className="muted small" style={{ marginTop: 0 }}>
+              Piper makes real audio on this device, free and private, several times faster than Natural voice, so it can keep up with listening
+              on most phones. Each voice downloads once (about 63 MB). Finished chapters keep playing with the screen locked and work offline.
+              Highlighting: sentence by sentence.
+            </p>
+          ) : (
           <p className="muted small" style={{ marginTop: 0 }}>
-            Kokoro creates real audio on this device, free and private. It downloads a 92 MB voice model once, then makes each chapter
+            Kokoro creates the most natural audio on this device, free and private. If it’s too slow on your phone, choose <strong>Fast natural</strong>. It downloads a 92 MB voice model once, then makes each chapter
             ahead of time. Making a chapter can take longer than listening to it, so start a few chapters (or the whole book) early and
             keep the app open while it works. Finished chapters keep playing with the screen locked and work offline. Highlighting: sentence by
             sentence (this voice doesn’t report the timing of each word).
           </p>
+          )}
 
           <div className="rate-row" style={{ marginBottom: 6 }}>
             <div className="rate-head">
@@ -257,7 +282,7 @@ export function NarrationPanel({
             )}
           </p>
 
-          {gpuAvailable && (
+          {gpuAvailable && mode === 'kokoro' && (
             <label className="switch">
               <span>
                 Faster generation with the graphics chip
@@ -278,7 +303,7 @@ export function NarrationPanel({
           <div className="voice-group">
             <h4>Natural voices</h4>
             <ul className="list">
-              {KOKORO_VOICES.map((v) => (
+              {voiceList.map((v) => (
                 <li key={v.id}>
                   <div className={`list-row ${v.id === voice ? 'current' : ''}`}>
                     <button className="grow" style={{ textAlign: 'left' }} onClick={() => setNarration({ voice: v.id })}>
@@ -287,7 +312,8 @@ export function NarrationPanel({
                         {v.grade?.startsWith('A') && <span className="tag">Best</span>}
                       </div>
                       <div className="sub">
-                        {v.gender === 'female' ? 'Female' : 'Male'} · {v.accent} · grade {v.grade}
+                        {v.gender === 'female' ? 'Female' : 'Male'} · {v.accent}
+                        {v.grade ? ` · grade ${v.grade}` : ''}
                       </div>
                     </button>
                     <button className="icon-btn" onClick={() => playPreview(v.id)} aria-label={`Preview ${v.name}`} disabled={!!preview}>

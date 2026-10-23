@@ -15,11 +15,11 @@ test('Sound check: beep, device voice and natural voice, with results to send', 
   await card.getByRole('button', { name: 'Say a sentence' }).click();
   await expect.poll(() => page.evaluate(() => (window as unknown as { __spoken: string[] }).__spoken.at(-1))).toBe('This is your device voice.');
   await card.getByRole('button', { name: 'No' }).click();
-  await card.getByRole('button', { name: 'Test natural voice' }).click();
-  await expect(card.getByRole('status')).toContainText(/^Works\./, { timeout: 20_000 });
+  await card.getByRole('button', { name: 'Test fast natural voice' }).click();
+  await expect(card.getByRole('status').first()).toContainText(/^Works\./, { timeout: 20_000 });
   await expect(card.locator('.voice-log')).toContainText('Beep (audio file): yes');
   await expect(card.locator('.voice-log')).toContainText('Device voice: no');
-  await expect(card.locator('.voice-log')).toContainText('Natural voice: Works.');
+  await expect(card.locator('.voice-log')).toContainText('Fast natural voice (Piper): Works.');
 });
 
 test('when natural voice fails, the player offers the device voice and it plays', async ({ page }) => {
@@ -34,7 +34,7 @@ test('when natural voice fails, the player offers the device voice and it plays'
   await page.getByRole('button', { name: 'Save to library' }).click();
   await page.getByRole('button', { name: 'Open Fallback' }).click();
   await page.getByRole('button', { name: 'Voice and speed' }).click();
-  await page.getByRole('radio', { name: 'Natural voice' }).click();
+  await page.getByRole('radio', { name: 'Fast natural' }).click();
   await page.getByRole('button', { name: 'Close', exact: true }).click();
   await page.getByTestId('play').click();
   await expect(page.getByText(/Couldn’t generate this chapter/)).toBeVisible({ timeout: 15_000 });

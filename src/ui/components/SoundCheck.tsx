@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { benchmarkVoice, describeBenchmark } from '../../core/audio/benchmark';
 import { DEFAULT_KOKORO_VOICE, getVoiceLog } from '../../core/audio/kokoroEngine';
+import { DEFAULT_PIPER_VOICE } from '../../core/audio/piper';
 import { encodeWav } from '../../core/audio/wav';
 import { audioSessionSupported, setPlaybackAudioSession } from '../audioSession';
 import { speechEngine } from '../engine';
@@ -29,6 +30,7 @@ export function SoundCheck() {
   const [speech, setSpeech] = useState<Answer>(null);
   const [speechError, setSpeechError] = useState('');
   const [natural, setNatural] = useState<{ busy: boolean; text: string } | null>(null);
+  const [fast, setFast] = useState<{ busy: boolean; text: string } | null>(null);
   const [asked, setAsked] = useState<'beep' | 'speech' | null>(null);
 
   const playBeep = async () => {
@@ -65,21 +67,25 @@ export function SoundCheck() {
     setAsked('speech');
   };
 
-  const testNatural = async () => {
+  const testVoice = async (kind: 'piper' | 'kokoro') => {
     pb.narrator?.pause();
-    setNatural({ busy: true, text: 'Starting the natural voice (first time: downloads 92 MB)…' });
+    const set = kind === 'piper' ? setFast : setNatural;
+    set({ busy: true, text: kind === 'piper' ? 'Starting the fast voice (first time: downloads about 63 MB)…' : 'Starting the natural voice (first time: downloads 92 MB)…' });
     try {
-      const b = await benchmarkVoice(neuralEngine(), DEFAULT_KOKORO_VOICE, (label) => setNatural({ busy: true, text: label }));
-      setNatural({ busy: false, text: `Works. ${describeBenchmark(b)}` });
+      const b = await benchmarkVoice(neuralEngine(kind), kind === 'piper' ? DEFAULT_PIPER_VOICE : DEFAULT_KOKORO_VOICE, (label) => set({ busy: true, text: label }));
+      set({ busy: false, text: `Works. ${describeBenchmark(b)}` });
+      // Let the listener hear it.
+      setPlaybackAudioSession();
     } catch (e) {
-      setNatural({ busy: false, text: `Didn’t work: ${(e as Error).message}` });
+      set({ busy: false, text: `Didn’t work: ${(e as Error).message}` });
     }
   };
 
   const report = [
     `Beep (audio file): ${beep ?? 'not tried'}${beepError ? ` — ${beepError}` : ''}`,
     `Device voice: ${speech ?? 'not tried'}${speechError ? ` — ${speechError}` : ''}`,
-    `Natural voice: ${natural?.text ?? 'not tried'}`,
+    `Fast natural voice (Piper): ${fast?.text ?? 'not tried'}`,
+    `Natural voice (Kokoro): ${natural?.text ?? 'not tried'}`,
     `Silent-mode override (Audio Session API): ${audioSessionSupported() ? 'available, on' : 'not available on this browser'}`,
     `Cross-origin isolated: ${typeof crossOriginIsolated !== 'undefined' && crossOriginIsolated}; cores: ${navigator.hardwareConcurrency}`,
     navigator.userAgent,
@@ -116,7 +122,7 @@ export function SoundCheck() {
     <section className="card" aria-labelledby="sound-h">
       <h3 id="sound-h">Sound check</h3>
       <p className="small muted" style={{ marginTop: 0 }}>
-        If you hear nothing, run these three steps. Turn the volume up first. If the bell icon in your status bar has a slash, Silent mode is on;
+        If you hear nothing, run these steps. Turn the volume up first. If the bell icon in your status bar has a slash, Silent mode is on;
         {audioSessionSupported() ? ' the app now plays anyway, but if a step fails, turn Silent mode off and try again.' : ' turn it off (switch on the side of the iPhone or Control Center).'}
       </p>
 
@@ -145,9 +151,23 @@ export function SoundCheck() {
       </div>
 
       <div className="check-step">
-        <strong>3. Natural voice</strong> <span className="small muted">(makes audio files on this phone; can take a few minutes the first time)</span>
+        <strong>3. Fast natural voice</strong> <span className="small muted">(recommended on iPhone; makes audio files on this phone)</span>
         <div>
-          <button className="btn" onClick={testNatural} disabled={natural?.busy}>
+          <button className="btn" onClick={() => testVoice('piper')} disabled={fast?.busy}>
+            {fast?.busy ? 'Testing…' : 'Test fast natural voice'}
+          </button>
+        </div>
+        {fast && (
+          <p className="small" role="status">
+            {fast.text}
+          </p>
+        )}
+      </div>
+
+      <div className="check-step">
+        <strong>4. Natural voice</strong> <span className="small muted">(best quality, slowest; can take a few minutes the first time)</span>
+        <div>
+          <button className="btn" onClick={() => testVoice('kokoro')} disabled={natural?.busy}>
             {natural?.busy ? 'Testing…' : 'Test natural voice'}
           </button>
         </div>
@@ -158,8 +178,8 @@ export function SoundCheck() {
         )}
       </div>
 
-      {(beep || speech || (natural && !natural.busy)) && (
-        <details style={{ marginTop: 10 }} open={beep === 'no' || speech === 'no' || !!natural?.text.startsWith('Didn’t')}>
+      {(beep || speech || (natural && !natural.busy) || (fast && !fast.busy)) && (
+        <details style={{ marginTop: 10 }} open={beep === 'no' || speech === 'no' || !!natural?.text.startsWith('Didn’t') || !!fast?.text.startsWith('Didn’t')}>
           <summary className="small">Results to send</summary>
           <pre className="voice-log">{report}</pre>
           <button

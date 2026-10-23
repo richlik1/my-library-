@@ -6,7 +6,7 @@ import { addListening, awardXp, getAudioWav, getChapterAudio, saveProgress, upda
 import { ListeningTracker, XP_RULES, xpIds } from '../../core/habits';
 import { habitsChanged } from './useHabits';
 import { audioQueue } from '../narration';
-import type { Book, Chapter, Position } from '../../core/types';
+import type { Book, Chapter, NarrationEngine, Position } from '../../core/types';
 import { isSequenceEngine } from '../../core/speech/engine';
 import { speechEngine } from '../engine';
 import { isNativeApp } from '../platform';
@@ -18,7 +18,7 @@ type WakeLockSentinelLike = { release(): Promise<void>; released?: boolean };
  * Connects a Narrator to React: progress saving, settings, wake lock,
  * Media Session metadata and foreground/background handling.
  */
-export function usePlayback(book: Book, chapters: Chapter[], start: Position, voiceId: string | null, mode: 'device' | 'kokoro' = 'device') {
+export function usePlayback(book: Book, chapters: Chapter[], start: Position, voiceId: string | null, mode: NarrationEngine = 'device') {
   const { settings } = useSettings();
   const [narrator, setNarrator] = useState<PlaybackController | null>(null);
   const [state, setState] = useState<NarratorState | null>(null);
@@ -55,7 +55,7 @@ export function usePlayback(book: Book, chapters: Chapter[], start: Position, vo
     const { start: _ignored, ...opts } = initial.current;
     const pos = lastPosition.current;
     const n: PlaybackController =
-      mode === 'kokoro'
+      mode !== 'device'
         ? new AudioNarrator(
             {
               bookId: book.id,
@@ -150,7 +150,7 @@ export function usePlayback(book: Book, chapters: Chapter[], start: Position, vo
   useEffect(() => {
     // The iOS app keeps narrating with the screen locked, so it doesn't need this.
     // Audio files keep playing with the screen locked, so they don't need it either.
-    if (!playing || !settings.keepAwake || isNativeApp() || mode === 'kokoro' || !('wakeLock' in navigator)) return;
+    if (!playing || !settings.keepAwake || isNativeApp() || mode !== 'device' || !('wakeLock' in navigator)) return;
     let lock: WakeLockSentinelLike | null = null;
     let cancelled = false;
     const acquire = async () => {

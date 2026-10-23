@@ -13,7 +13,9 @@ import { usePlaybackSession } from '../hooks/playbackSession';
 import { goBack, navigate } from '../hooks/useRoute';
 import { BookDetailsSheet } from './BookDetailsSheet';
 import { NarrationPanel, useAudioJobs, useReadyChapters } from './NarrationPanel';
-import { DEFAULT_KOKORO_VOICE, KOKORO_VOICES } from '../../core/audio/kokoroEngine';
+import { KOKORO_VOICES } from '../../core/audio/kokoroEngine';
+import { PIPER_VOICES } from '../../core/audio/piper';
+import { naturalVoiceFor } from '../narration';
 import { Icon } from './Icon';
 import { AnnotationsSheet, COLORS, ChaptersSheet, EditChapterSheet, NoteSheet, SleepSheet, VoiceSheet, swatch } from './PlayerSheets';
 import { Reader, type TextRange } from './Reader';
@@ -75,8 +77,8 @@ function PlayerView({ autoplay, at }: { autoplay: boolean; at?: { chapter: numbe
   const setBook = pb.setBook;
   const mode = book.narration?.engine ?? 'device';
   const jobs = useAudioJobs(book.id);
-  const kokoroVoice = book.narration?.voice ?? DEFAULT_KOKORO_VOICE;
-  const readyChapters = useReadyChapters(book.id, kokoroVoice, jobs);
+  const naturalVoice = naturalVoiceFor(book);
+  const readyChapters = useReadyChapters(book.id, naturalVoice, jobs);
   const [annotations, setAnnotations] = useState<Annotation[]>([]);
   useEffect(() => {
     void listAnnotations(book.id).then(setAnnotations);
@@ -440,7 +442,7 @@ function PlayerView({ autoplay, at }: { autoplay: boolean; at?: { chapter: numbe
             <button className="tool" onClick={() => setSheet('voice')} aria-label="Voice and speed">
               <Icon name="speed" size={20} />
               <span className="val">
-                {settings.rate.toFixed(2).replace(/\.?0+$/, '')}× · {audioMode ? (KOKORO_VOICES.find((v) => v.id === kokoroVoice)?.name ?? 'Voice') : 'Voice'}
+                {settings.rate.toFixed(2).replace(/\.?0+$/, '')}× · {audioMode ? ([...KOKORO_VOICES, ...PIPER_VOICES].find((v) => v.id === naturalVoice)?.name ?? 'Voice') : 'Voice'}
               </span>
             </button>
             <button className="tool" onClick={() => setSheet('chapters')}>

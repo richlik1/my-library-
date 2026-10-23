@@ -1,4 +1,7 @@
-import { KokoroEngine, DEFAULT_KOKORO_VOICE } from '../core/audio/kokoroEngine';
+import { KokoroEngine, DEFAULT_KOKORO_VOICE, KOKORO_VOICES } from '../core/audio/kokoroEngine';
+import { PiperEngine } from '../core/audio/piperEngine';
+import { DEFAULT_PIPER_VOICE, PIPER_VOICES } from '../core/audio/piper';
+import type { Book } from '../core/types';
 import { AudioQueue } from '../core/audio/queue';
 import type { LoadProgress, NeuralEngine } from '../core/audio/types';
 import { deleteAudio, getBook, getChapterAudio, getContent, getSettings, putAudio } from '../core/storage/db';
@@ -81,16 +84,27 @@ export const kokoroEngine = (): NeuralEngine & { runsIn: string; threads: number
  * Automated tests can install a small deterministic engine (no model download)
  * by setting `window.__MY_LIBRARY_TEST_ENGINE__` before the app loads.
  */
-export function neuralEngine(): NeuralEngine {
+export function neuralEngine(kind: 'kokoro' | 'piper' = 'kokoro'): NeuralEngine {
   const test = (globalThis as { __MY_LIBRARY_TEST_ENGINE__?: NeuralEngine }).__MY_LIBRARY_TEST_ENGINE__;
-  return test ?? kokoroEngine();
+  return test ?? (kind === 'piper' ? piperEngine : kokoroEngine());
+}
+
+/** The fast natural voice (Piper). */
+export const piperEngine = new PiperEngine();
+
+/** The voice a book uses with its natural-voice engine (falls back to that engine's default). */
+export function naturalVoiceFor(book: Book | undefined): string {
+  const engine = book?.narration?.engine;
+  const v = book?.narration?.voice;
+  if (engine === 'piper') return v && PIPER_VOICES.some((p) => p.id === v) ? v : DEFAULT_PIPER_VOICE;
+  return v && KOKORO_VOICES.some((k) => k.id === v) ? v : DEFAULT_KOKORO_VOICE;
 }
 
 /** One queue for the whole app, so generation continues while you browse. */
 export const audioQueue = new AudioQueue({
-  engine: neuralEngine,
+  engine: async (bookId) => neuralEngine((await getBook(bookId))?.narration?.engine === 'piper' ? 'piper' : 'kokoro'),
   chapterText: async (bookId, chapter) => (await getContent(bookId))?.chapters[chapter]?.text,
-  voiceFor: async (bookId) => (await getBook(bookId))?.narration?.voice ?? DEFAULT_KOKORO_VOICE,
+  voiceFor: async (bookId) => naturalVoiceFor(await getBook(bookId)),
   chapterAudio: getChapterAudio,
   putAudio,
   deleteAudio,

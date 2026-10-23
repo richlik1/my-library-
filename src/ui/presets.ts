@@ -46,8 +46,8 @@ export async function choosePreset(
 ): Promise<{ book: Book; regenerates: boolean }> {
   const before = book.narration;
   const regenerates =
-    preset.engine === 'kokoro' &&
-    before?.engine === 'kokoro' &&
+    preset.engine !== 'device' &&
+    before?.engine === preset.engine &&
     ((before.voice ?? DEFAULT_KOKORO_VOICE) !== preset.voice || (before.pause ?? settings.narrationPause) !== preset.pause);
   const narration = { engine: preset.engine, voice: preset.voice ?? before?.voice, pause: preset.pause, presetId: preset.id };
   const next = (await updateBook(book.id, { narration })) ?? { ...book, narration };

@@ -1,7 +1,7 @@
 {
   "name": "my-library",
   "private": true,
-  "version": "2.2.1",
+  "version": "2.3.0",
   "description": "My Library — a private, offline, free audiobook player for your own PDF, EPUB, DOCX and TXT books.",
   "type": "module",
   "scripts": {
@@ -25,7 +25,9 @@
     "idb": "^8.0.4",
     "jszip": "^3.10.2",
     "kokoro-js": "^1.2.1",
+    "onnxruntime-web": "1.22.0-dev.20250409-89f8206ba4",
     "pdfjs-dist": "^6.4.299",
+    "phonemizer": "^1.2.1",
     "react": "^19.3.0",
     "react-dom": "^19.3.0"
   },
