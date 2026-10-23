@@ -147,6 +147,8 @@ test('natural voice: when the voice is slower than listening, playback waits on 
   await page.getByRole('radio', { name: 'Natural voice' }).click();
   await page.getByRole('button', { name: 'Close', exact: true }).click();
   await page.getByTestId('play').click();
+  await expect(page.getByRole('button', { name: 'Pause' })).toBeVisible();
+  await expect.poll(() => timeShown(page), { timeout: 20_000 }).not.toBe('0:00');
   // It never stops by itself, and gets through the whole chapter and into the next one.
   const seen = new Set<string>();
   const t0 = Date.now();

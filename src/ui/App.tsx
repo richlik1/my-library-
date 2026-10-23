@@ -20,6 +20,7 @@ import { SettingsProvider, useSettings } from './hooks/settings';
 import { ToastProvider } from './hooks/toast';
 import { useRoute } from './hooks/useRoute';
 import { isNativeApp } from './platform';
+import { warmUpFastVoice } from './narration';
 
 /** Applies the chosen colour theme ('system' follows the device). */
 function ThemeSync() {
@@ -39,6 +40,11 @@ export function App() {
   const route = useRoute();
   const routeKey = JSON.stringify(route);
   useEffect(() => window.scrollTo(0, 0), [routeKey]);
+  // Get the fast natural voice ready in the background, so Play starts quickly.
+  useEffect(() => {
+    const t = setTimeout(warmUpFastVoice, 800);
+    return () => clearTimeout(t);
+  }, []);
   const tab = tabFor(route);
   return (
     <ToastProvider>

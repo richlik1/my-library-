@@ -1,5 +1,5 @@
 import { KokoroEngine, DEFAULT_KOKORO_VOICE, KOKORO_VOICES } from '../core/audio/kokoroEngine';
-import { PiperEngine } from '../core/audio/piperEngine';
+import { PiperEngine, fastVoiceReady } from '../core/audio/piperEngine';
 import { DEFAULT_PIPER_VOICE, PIPER_VOICES } from '../core/audio/piper';
 import type { Book } from '../core/types';
 import { isIOS } from '../core/speech/webSpeechEngine';
@@ -126,3 +126,14 @@ export const audioQueue = new AudioQueue({
     return { sentencePause: pauses[0], paragraphPause: pauses[1], ...(Object.keys(pronunciations).length ? { pronunciations } : {}) };
   },
 });
+
+/**
+ * Starts the fast voice in the background when the app opens, if it was used before (so it's already downloaded):
+ * by the time a book is opened and Play pressed, the voice is ready and the first sound comes in about a second.
+ */
+export function warmUpFastVoice() {
+  if ((globalThis as { __MY_LIBRARY_TEST_ENGINE__?: unknown }).__MY_LIBRARY_TEST_ENGINE__) return;
+  const voice = fastVoiceReady();
+  if (!voice || piperEngine.isLoaded()) return;
+  piperEngine.load(undefined, voice).catch(() => undefined);
+}

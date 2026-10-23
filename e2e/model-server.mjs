@@ -21,8 +21,28 @@ export function serveModel(dir, modelId, port) {
   return new Promise((resolve) => server.listen(port, () => resolve(server)));
 }
 
-/** Serves a folder as-is at http://localhost:<port>/ (with CORS), e.g. Piper voice files. */
-export function serveDir(dir, port) {
+/** Sends a file at about `bytesPerSec` (like a phone connection). */
+function throttled(file, res, bytesPerSec) {
+  const stream = createReadStream(file, { highWaterMark: 64 * 1024 });
+  const t0 = Date.now();
+  let sent = 0;
+  stream.on('data', (chunk) => {
+    sent += chunk.length;
+    res.write(chunk);
+    const wait = (sent / bytesPerSec) * 1000 - (Date.now() - t0);
+    if (wait > 0) {
+      stream.pause();
+      setTimeout(() => stream.resume(), wait);
+    }
+  });
+  stream.on('end', () => res.end());
+}
+
+/**
+ * Serves a folder as-is at http://localhost:<port>/ (with CORS), e.g. Piper voice files.
+ * `bytesPerSec` limits the speed of large files (> 1 MB).
+ */
+export function serveDir(dir, port, bytesPerSec = 0) {
   const server = createServer((req, res) => {
     const path = decodeURIComponent((req.url ?? '').split('?')[0]);
     const file = join(dir, path);
@@ -32,9 +52,11 @@ export function serveDir(dir, port) {
       res.writeHead(404).end();
       return;
     }
-    res.writeHead(200, { 'content-length': statSync(file).size, 'content-type': 'application/octet-stream' });
+    const size = statSync(file).size;
+    res.writeHead(200, { 'content-length': size, 'content-type': 'application/octet-stream' });
     if (req.method === 'HEAD') return res.end();
-    createReadStream(file).pipe(res);
+    if (bytesPerSec && size > 1e6) throttled(file, res, bytesPerSec);
+    else createReadStream(file).pipe(res);
   });
   return new Promise((resolve) => server.listen(port, () => resolve(server)));
 }

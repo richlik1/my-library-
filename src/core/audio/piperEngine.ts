@@ -14,6 +14,18 @@ const PROBE_MS = 30_000;
 const SYNTH_BASE_MS = 30_000;
 const SYNTH_PER_CHAR_MS = 300;
 
+const READY_KEY = 'ml-fast-voice';
+
+/** The fast voice last started successfully on this device (so it's downloaded), or null. */
+export function fastVoiceReady(): string | null {
+  try {
+    const v = localStorage.getItem(READY_KEY);
+    return v && PIPER_VOICES.some((p) => p.id === v) ? v : null;
+  } catch {
+    return null;
+  }
+}
+
 /** Forget the page mode an earlier version may have saved. */
 try {
   localStorage.removeItem('ml-piper-mode');
@@ -51,6 +63,15 @@ export class PiperEngine implements NeuralEngine {
 
   isLoaded() {
     return this.loadedVoice !== null;
+  }
+
+  /** Resolves when the voice being loaded is ready (or right away if nothing is loading). */
+  whenLoaded(): Promise<boolean> {
+    if (this.loadedVoice) return Promise.resolve(true);
+    return (this.loading ?? Promise.reject(new Error('not loading'))).then(
+      () => true,
+      () => false,
+    );
   }
 
   voices() {
@@ -143,6 +164,11 @@ export class PiperEngine implements NeuralEngine {
             await this.loadInWorker(urls, (f, l) => onProgress?.(f, l));
             vlog(`piper: ready in ${((Date.now() - t0) / 1000).toFixed(1)} s`);
             this.loadedVoice = v.id;
+            try {
+              localStorage.setItem(READY_KEY, v.id);
+            } catch {
+              /* private mode */
+            }
             onProgress?.(1, 'Voice ready');
             return;
           } catch (e) {

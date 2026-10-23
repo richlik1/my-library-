@@ -5,6 +5,7 @@ import type { PlaybackController } from '../../core/speech/controller';
 import type { NarratorState } from '../../core/speech/narrator';
 import { getBook, getContent, getProgress, updateBook } from '../../core/storage/db';
 import { DEFAULT_PIPER_VOICE } from '../../core/audio/piper';
+import { fastVoiceReady } from '../../core/audio/piperEngine';
 import { kokoroUnavailable } from '../narration';
 import type { Book, Chapter, Position } from '../../core/types';
 import { speechEngine } from '../engine';
@@ -49,6 +50,13 @@ async function loadSession(id: string): Promise<Session | null> {
   const [stored, content, progress] = await Promise.all([getBook(id), getContent(id), getProgress(id)]);
   let book = stored;
   if (!book || !content) return null;
+  const fast = fastVoiceReady();
+  if (!book.narration && fast && !isSequenceEngine(speechEngine)) {
+    // A new book: use the fast natural voice this device already has (it keeps playing with the screen locked).
+    const narration = { engine: 'piper' as const, voice: fast };
+    await updateBook(id, { narration });
+    book = { ...book, narration };
+  }
   if (book.narration?.engine === 'kokoro' && kokoroUnavailable()) {
     // Kokoro doesn't work on this device: use the fast natural voice so the book reads.
     const narration = { ...book.narration, engine: 'piper' as const, voice: DEFAULT_PIPER_VOICE };

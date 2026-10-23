@@ -15,7 +15,7 @@ import { BookDetailsSheet } from './BookDetailsSheet';
 import { NarrationPanel, useAudioJobs, useReadyChapters } from './NarrationPanel';
 import { KOKORO_VOICES } from '../../core/audio/kokoroEngine';
 import { PIPER_VOICES } from '../../core/audio/piper';
-import { naturalVoiceFor } from '../narration';
+import { naturalVoiceFor, piperEngine } from '../narration';
 import { Icon } from './Icon';
 import { AnnotationsSheet, COLORS, ChaptersSheet, EditChapterSheet, NoteSheet, SleepSheet, VoiceSheet, swatch } from './PlayerSheets';
 import { Reader, type TextRange } from './Reader';
@@ -350,6 +350,36 @@ function PlayerView({ autoplay, at }: { autoplay: boolean; at?: { chapter: numbe
                 }}
               >
                 Use device voice instead
+              </button>
+            </div>
+          )}
+          {audioMode && state.waitingForAudio && book.narration?.engine === 'piper' && chapterJob?.status === 'generating' && chapterJob.label?.startsWith('Downloading') && (
+            <div style={{ textAlign: 'center', margin: '2px 0 8px' }}>
+              <button
+                className="btn"
+                onClick={async () => {
+                  const voice = naturalVoiceFor(book);
+                  const next = await updateBook(book.id, { narration: { ...book.narration, engine: 'device' } });
+                  if (next) setBook(next);
+                  toast('Listening with the device voice. The natural voice keeps downloading.');
+                  // The download continues in the background; offer the natural voice back when it's ready.
+                  void piperEngine.whenLoaded().then(
+                    (ok) =>
+                      ok &&
+                      toast('The fast natural voice is ready.', {
+                        ms: 20_000,
+                        action: {
+                          label: 'Switch',
+                          run: async () => {
+                            const b = await updateBook(book.id, { narration: { ...book.narration, engine: 'piper', voice } });
+                            if (b) setBook(b);
+                          },
+                        },
+                      }),
+                  );
+                }}
+              >
+                Listen with the device voice meanwhile
               </button>
             </div>
           )}

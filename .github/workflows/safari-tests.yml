@@ -31,7 +31,7 @@ jobs:
 
   webkit-macos:
     runs-on: macos-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
     env:
       PW_WEBKIT: '1'
       PIPER_MODEL_DIR: ${{ github.workspace }}/voices/piper
@@ -56,8 +56,8 @@ jobs:
       - name: Build
         run: npm run build
       - name: Required — sound check, audio playback, the real fast natural voice and 4 minutes of listening in WebKit
-        timeout-minutes: 20
-        run: npx playwright test e2e/sound.spec.ts e2e/piper-real.spec.ts e2e/piper-long.spec.ts e2e/natural-voice.spec.ts --project=iphone-safari --reporter=list --retries=0 --timeout=600000
+        timeout-minutes: 25
+        run: npx playwright test e2e/sound.spec.ts e2e/piper-real.spec.ts e2e/piper-long.spec.ts e2e/piper-startup.spec.ts e2e/natural-voice.spec.ts --project=iphone-safari --reporter=list --retries=0 --timeout=600000
       - name: Info — real Kokoro speed test in WebKit
         timeout-minutes: 12
         continue-on-error: true

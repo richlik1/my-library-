@@ -112,7 +112,7 @@ test('real Piper: buttons respond and Pause stops the sound while the voice is m
 
   // Pause stops the sound, and it stays stopped.
   await page.getByRole('button', { name: 'Pause' }).click();
-  await expect(page.getByRole('button', { name: 'Play' })).toBeVisible({ timeout: 1000 });
+  await expect(page.getByRole('button', { name: 'Play', exact: true })).toBeVisible({ timeout: 1000 });
   const paused = await page.evaluate(() => [...document.querySelectorAll('audio')].every((a) => a.paused));
   const at = await time();
   await page.waitForTimeout(3000);
@@ -127,7 +127,7 @@ test('real Piper: buttons respond and Pause stops the sound while the voice is m
   const resumed = await time();
   await expect.poll(time, { timeout: 15_000 }).not.toBe(resumed);
   await page.getByRole('button', { name: 'Pause' }).click();
-  await expect(page.getByRole('button', { name: 'Play' })).toBeVisible({ timeout: 1000 });
+  await expect(page.getByRole('button', { name: 'Play', exact: true })).toBeVisible({ timeout: 1000 });
 });
 
 test('real Piper: a stuck voice is reported, offers the device voice, and never freezes the screen', async ({ page }) => {
