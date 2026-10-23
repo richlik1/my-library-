@@ -11,3 +11,8 @@ declare module 'pdfjs-dist/legacy/build/pdf.worker.min.mjs' {
 declare module 'onnxruntime-web/webgpu' {
   export * from 'onnxruntime-common';
 }
+
+/** The plain WebAssembly build of ONNX Runtime has the same API as the main entry. */
+declare module 'onnxruntime-web/wasm' {
+  export * from 'onnxruntime-common';
+}

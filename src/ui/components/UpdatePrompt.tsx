@@ -69,8 +69,9 @@ export function UpdatePrompt() {
     <Sheet title={`What’s new in My Library ${__APP_VERSION__}`} onClose={() => setWhatsNew(false)}>
       <ul className="whats-new">
         <li>
-          <strong>Voices fixed for Safari:</strong> the voices got stuck on iPhone because of a Safari limitation when downloading the voice. This version
-          was tested in Safari’s engine with the real voices before it was published.
+          <strong>Voices fixed for Safari:</strong> the fast natural voice now uses a lighter engine (about 3× faster in testing, and a smaller
+          download). If it gets stuck in the background on your phone, it switches to another way within 30 seconds and remembers it. This version
+          was tested in Safari’s engine with the real voice before it was published.
         </li>
         <li>
           <strong>New: Fast natural voice.</strong> A lighter voice (Piper) that makes audio several times faster, made for iPhone. In Voice &amp;

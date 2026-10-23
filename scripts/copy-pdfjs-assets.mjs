@@ -27,6 +27,9 @@ try {
   const ort = join(process.cwd(), 'public', 'ort');
   mkdirSync(ort, { recursive: true });
   for (const f of ['ort-wasm-simd-threaded.jsep.mjs', 'ort-wasm-simd-threaded.jsep.wasm']) cpSync(join(tdist, f), join(ort, f));
+  // Plain WebAssembly build for the Piper fast voice (same ONNX Runtime package).
+  const odist = join(dirname(require.resolve('onnxruntime-web')), '..', 'dist');
+  for (const f of ['ort-wasm-simd-threaded.mjs', 'ort-wasm-simd-threaded.wasm']) cpSync(join(odist, f), join(ort, f));
   console.log('[copy-pdfjs-assets] copied ONNX Runtime WebAssembly files to public/ort');
 } catch {
   console.log('[copy-pdfjs-assets] @huggingface/transformers not installed yet, skipping ONNX Runtime files');

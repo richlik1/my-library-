@@ -70,3 +70,21 @@ test('real Piper: a book plays with the fast natural voice', async ({ page }) =>
   console.log(`Piper: first sound ${((Date.now() - t0) / 1000).toFixed(1)} s after Play (first use, includes download from the local server)`);
   await expect(page.locator('.chunk.active')).toBeVisible();
 });
+
+test('real Piper: a stuck background thread falls back to running on the page', async ({ page }) => {
+  test.setTimeout(5 * 60_000);
+  await page.addInitScript(() => {
+    (window as unknown as { __MY_LIBRARY_VOICE_HANG__: string }).__MY_LIBRARY_VOICE_HANG__ = 'piper';
+  });
+  await page.goto('./#/settings');
+  const card = page.getByRole('region', { name: 'Sound check' });
+  await card.getByRole('button', { name: 'Test fast natural voice' }).click();
+  const status = card.getByRole('status').first();
+  try {
+    await expect(status).toContainText(/^(Works|Didn’t work)/, { timeout: 4 * 60_000 });
+  } finally {
+    console.log(`Piper fallback report:\n${await card.locator('.voice-log').textContent().catch(() => '(no log)')}`);
+  }
+  await expect(status).toContainText(/^Works\./);
+  await expect(card.locator('.voice-log')).toContainText('piper page: ready');
+});
