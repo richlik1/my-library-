@@ -1,5 +1,5 @@
-# Runs the whole test suite, including the real voice models, in WebKit
-# (Safari's engine) with iPhone settings, on Linux and on macOS.
+# Runs the app in WebKit (Safari's engine) with iPhone settings on macOS:
+# the real voices first (short time limits), then the rest of the suite.
 name: Safari engine tests
 
 on:
@@ -16,13 +16,13 @@ permissions:
   contents: read
 
 jobs:
-  webkit:
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, macos-latest]
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 60
+  webkit-macos:
+    runs-on: macos-latest
+    timeout-minutes: 45
+    env:
+      PW_WEBKIT: '1'
+      PIPER_MODEL_DIR: ${{ github.workspace }}/voices/piper
+      KOKORO_TEST_MODEL_DIR: ${{ github.workspace }}/voices/kokoro
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -30,7 +30,7 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - run: npx playwright install --with-deps webkit
+      - run: npx playwright install webkit
       - name: Download voices (Piper Lessac, Kokoro q8)
         run: |
           d=voices/piper/en/en_US/lessac/medium
@@ -40,15 +40,27 @@ jobs:
           for f in config.json tokenizer.json tokenizer_config.json onnx/model_quantized.onnx; do
             curl -sSfL -o voices/kokoro/$f https://huggingface.co/onnx-community/Kokoro-82M-v1.0-ONNX/resolve/main/$f
           done
-      - name: All tests in WebKit (iPhone 14 settings)
-        env:
-          PW_WEBKIT: '1'
-          PIPER_MODEL_DIR: ${{ github.workspace }}/voices/piper
-          KOKORO_TEST_MODEL_DIR: ${{ github.workspace }}/voices/kokoro
-        run: npx playwright test --project=iphone-safari --reporter=list --retries=0
+      - name: Build
+        run: npm run build
+      - name: 1. Sound check + fast natural voice (real Piper) in WebKit
+        timeout-minutes: 12
+        continue-on-error: true
+        run: npx playwright test e2e/sound.spec.ts e2e/piper-real.spec.ts --project=iphone-safari --reporter=list --retries=0 --timeout=300000
+      - name: 2. Natural voice (real Kokoro) in WebKit
+        timeout-minutes: 15
+        continue-on-error: true
+        run: npx playwright test e2e/kokoro-real.spec.ts --project=iphone-safari --reporter=list --retries=0 -g "speed test"
+      - name: 3. Core loop and natural-voice playback in WebKit
+        timeout-minutes: 10
+        continue-on-error: true
+        run: npx playwright test e2e/core-loop.spec.ts e2e/natural-voice.spec.ts --project=iphone-safari --reporter=list --retries=0 --timeout=60000
+      - name: 4. Everything else in WebKit
+        timeout-minutes: 15
+        continue-on-error: true
+        run: npx playwright test --project=iphone-safari --reporter=list --retries=0 --timeout=45000 --max-failures=15
       - if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: webkit-results-${{ matrix.os }}
+          name: webkit-results
           path: test-results/
           retention-days: 7

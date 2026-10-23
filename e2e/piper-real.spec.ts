@@ -23,18 +23,33 @@ test.beforeEach(async ({ page }) => {
     (window as unknown as { __MY_LIBRARY_PIPER_HOST__: string }).__MY_LIBRARY_PIPER_HOST__ = 'http://localhost:4198/';
   });
   await page.addInitScript(speechStub);
-  page.on('console', (m) => m.type() === 'error' && console.log('browser error:', m.text().slice(0, 300)));
+  page.on('console', (m) => (m.type() === 'error' || m.type() === 'warning') && console.log(`browser ${m.type()}:`, m.text().slice(0, 300)));
+  page.on('pageerror', (e) => console.log('page error:', e.message));
 });
 
 test('real Piper: Sound check speed test', async ({ page }) => {
   test.setTimeout(5 * 60_000);
   await page.goto('./#/settings');
-  await page.evaluate(() => navigator.serviceWorker.ready);
+  // Wait (briefly) for the service worker, then reload so the page runs as installed.
+  await page.evaluate(() => Promise.race([navigator.serviceWorker?.ready, new Promise((r) => setTimeout(r, 10_000))]));
   await page.reload();
+  console.log(`crossOriginIsolated=${await page.evaluate(() => crossOriginIsolated)}`);
   const card = page.getByRole('region', { name: 'Sound check' });
   await card.getByRole('button', { name: 'Test fast natural voice' }).click();
   const status = card.getByRole('status').first();
-  await expect(status).toContainText(/^(Works|Didn’t work)/, { timeout: 4 * 60_000 });
+  const seen: string[] = [];
+  const watch = setInterval(async () => {
+    const t = await status.textContent().catch(() => null);
+    if (t && seen.at(-1) !== t) seen.push(t);
+  }, 1000);
+  try {
+    await expect(status).toContainText(/^(Works|Didn’t work)/, { timeout: 4 * 60_000 });
+  } finally {
+    clearInterval(watch);
+    console.log(`Piper steps: ${seen.join(' | ')}`);
+    const log = await card.locator('.voice-log').textContent().catch(() => '(no log)');
+    console.log(`Piper sound-check report:\n${log}`);
+  }
   console.log(`Piper speed test: ${await status.textContent()}`);
   await expect(status).toContainText(/^Works\./);
 });
