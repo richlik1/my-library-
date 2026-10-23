@@ -70,6 +70,12 @@ test('core loop: import → clean text → natural voice → highlight → save 
   await page.getByRole('button', { name: 'Save this sentence as a lesson' }).click();
   await expect(page.getByText('Saved to your quotes as a lesson')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Pause' })).toBeVisible();
+  // The message never covers the buttons at the top.
+  const toastBox = (await page.locator('.toast').first().boundingBox())!;
+  for (const name of ['Close player', 'Ask My Book', 'Book details']) {
+    const b = (await page.getByRole('button', { name }).boundingBox())!;
+    expect(b.y + b.height <= toastBox.y || b.y >= toastBox.y + toastBox.height, `${name} is not covered`).toBe(true);
+  }
   await page.getByRole('button', { name: 'Pause' }).click();
 
   // 6. Offline, then restart the app.

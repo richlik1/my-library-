@@ -32,12 +32,10 @@ export function UpdatePrompt() {
     },
   });
 
+  // Offline support is set up silently (the Home screen already says it works offline).
   useEffect(() => {
-    if (offlineReady) {
-      toast('My Library is ready to work offline.');
-      setOfflineReady(false);
-    }
-  }, [offlineReady, setOfflineReady, toast]);
+    if (offlineReady) setOfflineReady(false);
+  }, [offlineReady, setOfflineReady]);
 
   useEffect(() => {
     if (!needRefresh) return;
@@ -69,20 +67,20 @@ export function UpdatePrompt() {
     <Sheet title={`What’s new in My Library ${__APP_VERSION__}`} onClose={() => setWhatsNew(false)}>
       <ul className="whats-new">
         <li>
-          <strong>Buttons and Pause respond again:</strong> the voices no longer run on the same thread as the screen, which could freeze every
-          button for seconds while audio was being made. Books set to the other natural voice (Kokoro, which doesn’t work on iPhone) now use{' '}
-          <strong>Fast natural</strong> automatically.
+          <strong>The natural voice starts fast:</strong> Home offers a one-time download (63 MB), then every book reads with it and Play starts
+          in about 2 seconds. While it downloads, you can listen with the device voice and switch back when it’s ready.
         </li>
         <li>
-          <strong>Keeps playing:</strong> when the next part of a chapter isn’t ready yet, the player now waits (silently) and continues by
-          itself instead of stopping, so your phone keeps the app running. Coming back to the app restarts audio the phone stopped. Your place
-          is saved as you listen. If audio still stops, Settings → Sound check → <strong>Listening log</strong> shows why; copy it and send it.
+          <strong>Buttons and Pause always respond:</strong> the voice never runs on the same thread as the screen any more (that could freeze
+          every button for seconds). Messages no longer cover the buttons at the top.
         </li>
         <li>
-          <strong>Voices fixed for Safari:</strong> the fast natural voice now uses a lighter engine (about 3× faster in testing, and a smaller
-          download). If it gets stuck in the background on your phone, it switches to another way within 30 seconds and remembers it. This version
-          was tested in Safari’s engine with the real voice before it was published. The other natural voice (Kokoro) still doesn’t work on
-          iPhone, so use <strong>Fast natural</strong>.
+          <strong>Keeps playing:</strong> when the next part isn’t ready yet, the player waits and continues by itself instead of stopping, and
+          your place is saved as you listen. If audio stops anyway, Settings → Sound check → <strong>Listening log</strong> shows why.
+        </li>
+        <li>
+          <strong>Clearer Voice &amp; speed:</strong> the voice comes first, with <strong>Fast natural</strong> recommended. The other natural
+          voice (Kokoro) doesn’t work on iPhone, so books that used it now use Fast natural.
         </li>
         <li>
           <strong>New: Fast natural voice.</strong> A lighter voice (Piper) that makes audio several times faster, made for iPhone. In Voice &amp;

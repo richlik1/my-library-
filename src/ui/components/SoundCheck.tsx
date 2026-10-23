@@ -7,6 +7,7 @@ import { audioSessionSupported, setPlaybackAudioSession } from '../audioSession'
 import { speechEngine } from '../engine';
 import { usePlaybackSession } from '../hooks/playbackSession';
 import { useToast } from '../hooks/toast';
+import { kokoroUnavailable } from '../narration';
 import { neuralEngine } from '../narration';
 
 type Answer = 'yes' | 'no' | null;
@@ -164,6 +165,8 @@ export function SoundCheck() {
         )}
       </div>
 
+      {!kokoroUnavailable() && (
+        <>
       <div className="check-step">
         <strong>4. Natural voice</strong> <span className="small muted">(best quality, slowest; can take a few minutes the first time)</span>
         <div>
@@ -177,6 +180,8 @@ export function SoundCheck() {
           </p>
         )}
       </div>
+        </>
+      )}
 
       <details style={{ marginTop: 10 }}>
         <summary className="small">Listening log (if audio stopped by itself)</summary>

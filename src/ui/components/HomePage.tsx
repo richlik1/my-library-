@@ -14,6 +14,7 @@ import { GoalCard } from './Goal';
 import { useHabits } from '../hooks/useHabits';
 import { useSettings } from '../hooks/settings';
 import { useImporter } from './useImporter';
+import { VoiceSetupCard } from './VoiceSetupCard';
 
 const isStandalone = () =>
   (navigator as Navigator & { standalone?: boolean }).standalone === true || window.matchMedia?.('(display-mode: standalone)').matches;
@@ -216,6 +217,8 @@ export function HomePage() {
               )}
             </section>
           )}
+
+          <VoiceSetupCard />
 
           {settings.habits && habits && <GoalCard habits={habits} goal={settings.dailyGoalMinutes} showStreak={settings.streaks} />}
 

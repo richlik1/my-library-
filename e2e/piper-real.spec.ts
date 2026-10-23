@@ -25,6 +25,11 @@ test.beforeEach(async ({ page }) => {
   await page.addInitScript(speechStub);
   page.on('console', (m) => (m.type() === 'error' || m.type() === 'warning') && console.log(`browser ${m.type()}:`, m.text().slice(0, 300)));
   page.on('pageerror', (e) => console.log('page error:', e.message));
+  // Optional: a slower processor, like a phone (Chromium only).
+  if (process.env.CPU_SLOWDOWN && page.context().browser()?.browserType().name() === 'chromium') {
+    const cdp = await page.context().newCDPSession(page);
+    await cdp.send('Emulation.setCPUThrottlingRate', { rate: Number(process.env.CPU_SLOWDOWN) });
+  }
 });
 
 test('real Piper: Sound check speed test', async ({ page }) => {

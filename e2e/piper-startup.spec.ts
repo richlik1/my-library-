@@ -81,3 +81,31 @@ test('real Piper start-up: switching to the device voice during the download, th
   await page.getByRole('button', { name: 'Switch' }).click({ timeout: 3 * 60_000 });
   await expect(page.getByRole('button', { name: 'Voice and speed' })).toContainText('Lessac');
 });
+
+test('real Piper: the Home card downloads the voice ahead of time, then books use it and start quickly', async ({ page }) => {
+  test.setTimeout(6 * 60_000);
+  const server = await serveDir(DIR!, 4202, 4e6);
+  page.once('close', () => server.close());
+  await page.addInitScript(() => {
+    (window as unknown as { __MY_LIBRARY_PIPER_HOST__: string }).__MY_LIBRARY_PIPER_HOST__ = 'http://localhost:4202/';
+  });
+  await page.addInitScript(speechStub);
+  await page.goto('./');
+  await page.getByRole('button', { name: 'Try a sample book' }).click().catch(() => undefined);
+  await page.goto('./');
+  const card = page.getByRole('region', { name: 'Get the natural voice' });
+  await card.getByRole('button', { name: 'Download' }).click();
+  await expect(card.getByRole('status')).toContainText(/Downloading the voice/);
+  await expect(page.getByRole('region', { name: 'Natural voice ready' })).toBeVisible({ timeout: 3 * 60_000 });
+  // A new book now reads with the natural voice, without choosing it, and starts quickly.
+  await addBook(page, 4);
+  await expect(page.getByRole('button', { name: 'Voice and speed' })).toContainText('Lessac');
+  const t0 = Date.now();
+  await page.getByTestId('play').click();
+  await expect.poll(() => time(page), { timeout: 60_000 }).not.toBe('0:00');
+  console.log(`first sound after Play once the voice was downloaded from Home: ${((Date.now() - t0) / 1000).toFixed(1)} s`);
+  expect(Date.now() - t0).toBeLessThan(4000);
+  // The card is gone once the voice works.
+  await page.getByRole('button', { name: 'Close player' }).click();
+  await expect(page.getByRole('region', { name: /natural voice/i })).toHaveCount(0);
+});

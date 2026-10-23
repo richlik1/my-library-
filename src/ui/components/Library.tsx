@@ -116,7 +116,8 @@ export function Library() {
                   <button onClick={() => navigate(`/book/${b.id}`)} aria-label={`Open ${b.title}`} style={{ textAlign: 'left' }}>
                     <div style={{ position: 'relative' }}>
                       <Cover book={b} />
-                      <span className="badge">{b.format}</span>
+                      {/* A generated cover without an author already shows the format. */}
+                      {(b.cover || b.author) && <span className="badge">{b.format}</span>}
                       {b.ocr && <span className="badge warn">OCR</span>}
                     </div>
                   </button>

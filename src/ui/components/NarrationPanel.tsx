@@ -114,11 +114,9 @@ export function NarrationPanel({
 
   return (
     <section style={{ marginBottom: 18 }}>
-      <PresetPicker book={book} onBookChange={onBookChange} />
-      <AmbientPicker />
-      <p className="small muted" style={{ margin: '0 0 12px' }}>
-        No sound? <a href="#/settings">Run the Sound check</a> in Settings.
-      </p>
+      <div className="rate-head" style={{ marginBottom: 8 }}>
+        <span>Voice</span>
+      </div>
       <div className="seg-nav" role="radiogroup" aria-label="Narration">
         <a
           href="#"
@@ -161,17 +159,24 @@ export function NarrationPanel({
       </div>
 
       {mode === 'device' ? (
-        <p className="muted small" style={{ marginTop: 0 }}>
-          Instant, using your device’s built-in voices. On iPhone it stops when the screen locks. Choose <strong>Fast natural</strong> to
-          listen with the screen locked. Highlighting: word by word when your device’s voice reports words, otherwise sentence by sentence.
-        </p>
+        <>
+          <p className="muted small" style={{ marginTop: 0 }}>
+            Instant, using your device’s built-in voices. On iPhone it stops when the screen locks. Highlighting: word by word when your
+            device’s voice reports words, otherwise sentence by sentence.
+          </p>
+          <button className="btn btn-primary" style={{ width: '100%', marginBottom: 12 }} onClick={() => void setNarration({ engine: 'piper' })}>
+            Use Fast natural (recommended)
+          </button>
+          <p className="muted small" style={{ marginTop: 0 }}>
+            A natural-sounding voice that keeps playing with the screen locked and works offline. Free and private; downloads once (63 MB).
+          </p>
+        </>
       ) : (
         <>
           {mode === 'piper' ? (
             <p className="muted small" style={{ marginTop: 0 }}>
-              Piper makes real audio on this device, free and private, several times faster than Natural voice, so it can keep up with listening
-              on most phones. Each voice downloads once (about 63 MB). Finished chapters keep playing with the screen locked and work offline.
-              Highlighting: sentence by sentence.
+              Natural speech made on this device, free and private, faster than you listen. Keeps playing with the screen locked and works
+              offline. Each voice downloads once (about 63 MB). Highlighting: sentence by sentence.
             </p>
           ) : (
           <p className="muted small" style={{ marginTop: 0 }}>
@@ -337,6 +342,11 @@ export function NarrationPanel({
           </div>
         </>
       )}
+      <PresetPicker book={book} onBookChange={onBookChange} />
+      <AmbientPicker />
+      <p className="small muted" style={{ margin: '0 0 12px' }}>
+        No sound? <a href="#/settings">Run the Sound check</a> in Settings.
+      </p>
     </section>
   );
 }

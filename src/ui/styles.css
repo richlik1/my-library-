@@ -1169,7 +1169,8 @@ ol.steps li {
 .toasts {
   position: fixed;
   left: 50%;
-  top: calc(var(--safe-top) + 12px);
+  /* Below the header bar, so the buttons at the top are never covered. */
+  top: calc(var(--safe-top) + 68px);
   transform: translateX(-50%);
   z-index: 60;
   display: grid;

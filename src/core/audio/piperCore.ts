@@ -30,13 +30,20 @@ async function cachedBytes(url: string, onProgress: (loaded: number, total: numb
   if (reader) {
     const parts: Uint8Array[] = [];
     let loaded = 0;
+    let reported = 0;
     for (;;) {
       const { done, value } = await reader.read();
       if (done) break;
       parts.push(value);
       loaded += value.length;
-      onProgress(loaded, total);
+      // At most 10 updates a second: each one redraws the screen.
+      const now = performance.now();
+      if (now - reported > 100) {
+        reported = now;
+        onProgress(loaded, total);
+      }
     }
+    onProgress(loaded, total);
     const all = new Uint8Array(loaded);
     let o = 0;
     for (const p of parts) {

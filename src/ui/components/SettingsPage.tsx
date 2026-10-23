@@ -12,7 +12,7 @@ import { ImportCheck } from './ImportCheck';
 import { isNativeApp } from '../platform';
 import { benchmarkVoice, describeBenchmark } from '../../core/audio/benchmark';
 import { DEFAULT_KOKORO_VOICE, getVoiceLog, voiceThreads } from '../../core/audio/kokoroEngine';
-import { neuralEngine } from '../narration';
+import { neuralEngine, kokoroUnavailable } from '../narration';
 import { SoundCheck } from './SoundCheck';
 
 export function SettingsPage() {
@@ -331,11 +331,13 @@ export function SettingsPage() {
             </ul>
           </>
         )}
-        <div className="row" style={{ marginTop: 14, alignItems: 'center' }}>
-          <button className="btn" onClick={runBench} disabled={bench?.busy}>
-            {bench?.busy ? 'Testing…' : 'Test natural voice speed'}
-          </button>
-        </div>
+        {!kokoroUnavailable() && (
+          <div className="row" style={{ marginTop: 14, alignItems: 'center' }}>
+            <button className="btn" onClick={runBench} disabled={bench?.busy}>
+              {bench?.busy ? 'Testing…' : 'Test natural voice speed'}
+            </button>
+          </div>
+        )}
         {bench && (
           <p className="small" role="status" style={{ marginBottom: 0 }}>
             {bench.text}
@@ -436,9 +438,9 @@ export function SettingsPage() {
               Spoken Content → Voices. Then pick them in Voice &amp; speed.
             </li>
             <li>
-              <strong>To listen with the screen locked</strong>, open a book, tap <strong>Voice &amp; speed</strong>, choose{' '}
-              <strong>Natural voice</strong> and generate a few chapters (or the whole book) first. Generated chapters keep playing locked,
-              in other apps and offline, with Lock Screen controls.
+              <strong>To listen with the screen locked</strong>, open a book, tap <strong>Voice &amp; speed</strong> and choose{' '}
+              <strong>Fast natural</strong>. It keeps playing locked, in other apps and offline, with Lock Screen controls. Press Play with
+              the app open for a moment first, so the next minutes are made before you lock the phone.
             </li>
             <li>
               <strong>Honest limitation:</strong> the Device voice (browser speech) stops when the screen locks or you switch apps; My Library
