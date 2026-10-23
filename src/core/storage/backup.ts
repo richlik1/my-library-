@@ -1,7 +1,7 @@
 import type { BusinessProfile, DailyBlock, GrowthBookState, GrowthNote, WeeklyReview } from '../../growth/types';
 import type { Annotation, Book, BookContent, Progress, Settings } from '../types';
 import { DEFAULT_SETTINGS } from '../types';
-import { GROWTH_STORES, db } from './db';
+import { GROWTH_STORES, clearSettingsMirror, db } from './db';
 import type { ListeningDay, XpEvent } from '../habits';
 import type { Summary } from '../summaries';
 
@@ -155,7 +155,10 @@ export async function restoreBackup(backup: Backup, opts: { restoreSettings?: bo
       summary.annotations++;
     }
   }
-  if (opts.restoreSettings && backup.settings) await tx.objectStore('kv').put({ ...DEFAULT_SETTINGS, ...backup.settings }, 'settings');
+  if (opts.restoreSettings && backup.settings) {
+    clearSettingsMirror();
+    await tx.objectStore('kv').put({ ...DEFAULT_SETTINGS, ...backup.settings }, 'settings');
+  }
 
   // Growth Library: keep whichever copy of each record is newer.
   const g = backup.growth;

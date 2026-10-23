@@ -120,6 +120,27 @@ describe('library storage', () => {
     expect((await getSettings()).categories).toEqual(['Only Mine']); // a later removal is respected
   });
 
+  it('keeps a settings change made just before the app closed, and a restored backup replaces it', async () => {
+    const store = new Map<string, string>();
+    (globalThis as { localStorage?: unknown }).localStorage = {
+      getItem: (k: string) => store.get(k) ?? null,
+      setItem: (k: string, v: string) => store.set(k, v),
+      removeItem: (k: string) => store.delete(k),
+    };
+    try {
+      const s = await getSettings();
+      await saveSettings({ ...s, theme: 'dark' });
+      const backup = await createBackup(false);
+      // The app closes before the database write of the next change finishes: only the instant copy has it.
+      store.set('ml-settings', JSON.stringify({ at: Date.now() + 1000, s: { ...s, theme: 'light' } }));
+      expect((await getSettings()).theme).toBe('light');
+      await restoreBackup(backup, { restoreSettings: true });
+      expect((await getSettings()).theme).toBe('dark');
+    } finally {
+      delete (globalThis as { localStorage?: unknown }).localStorage;
+    }
+  });
+
   it('rejects files that are not backups', () => {
     expect(() => parseBackup('{"hello":1}')).toThrow(/not a My Library backup/);
     expect(() => parseBackup('nope')).toThrow(/not valid JSON/);

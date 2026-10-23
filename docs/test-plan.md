@@ -67,3 +67,19 @@ Real models, run by `.github/workflows/voice-tests.yml` on a GitHub-hosted runne
 | Kokoro stuck-mode fallback | switched threads → single, completed | — | Passed |
 
 Not measured on iPhone. Built-in presets now use Piper.
+
+## 2.3.3 — Fast natural voice in Safari’s engine
+
+`.github/workflows/safari-tests.yml` run 39904396120 (commit `eae5d78`), WebKit 26.0 on a macOS runner with iPhone 14
+settings, real Lessac voice served locally:
+
+| Check | Result |
+|---|---|
+| Sound check → fast natural voice (background thread) | **Passed**: ready in 5 s, 8.7 s of speech in 2.7 s (**3.2×** listening speed) |
+| A book plays with the fast natural voice | **Passed**: first sound 5.0 s after Play |
+| Background thread forced to hang → falls back to the page | **Passed**: switched after 34 s, then 3.9× |
+| Kokoro speed test in WebKit | **Failed** (no result in 9 min); labelled “doesn’t work yet” on iPhone |
+| Offline reload tests in WebKit | Failed with “WebKit encountered an internal error” on `page.reload()` while offline (Playwright WebKit); passed in Chromium |
+
+Cause of the earlier hang: not proven. The change that fixed it switched from ONNX Runtime’s WebGPU build to its plain WebAssembly build
+(also 3× faster in Chromium: 1.4× → 4.1×, and a 11 MB runtime instead of 22 MB). Not yet measured on an iPhone.

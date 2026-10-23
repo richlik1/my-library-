@@ -71,7 +71,8 @@ export function UpdatePrompt() {
         <li>
           <strong>Voices fixed for Safari:</strong> the fast natural voice now uses a lighter engine (about 3× faster in testing, and a smaller
           download). If it gets stuck in the background on your phone, it switches to another way within 30 seconds and remembers it. This version
-          was tested in Safari’s engine with the real voice before it was published.
+          was tested in Safari’s engine with the real voice before it was published. The other natural voice (Kokoro) still doesn’t work on
+          iPhone, so use <strong>Fast natural</strong>.
         </li>
         <li>
           <strong>New: Fast natural voice.</strong> A lighter voice (Piper) that makes audio several times faster, made for iPhone. In Voice &amp;

@@ -12,6 +12,7 @@ import { audioQueue, kokoroDevice, naturalVoiceFor, neuralEngine, setKokoroDevic
 import { PIPER_VOICES } from '../../core/audio/piper';
 import { formatBytes } from './BookDetailsSheet';
 import { Icon } from './Icon';
+import { isIOS } from '../../core/speech/webSpeechEngine';
 import { useSettings } from '../hooks/settings';
 import { activePreset, allPresets, choosePreset, newPresetId } from '../presets';
 import { SOUNDSCAPES, ambient } from '../ambient';
@@ -173,6 +174,12 @@ export function NarrationPanel({
             </p>
           ) : (
           <p className="muted small" style={{ marginTop: 0 }}>
+            {isIOS() && (
+              <>
+                <strong>On iPhone and iPad this voice doesn’t work yet</strong> (it doesn’t finish in Safari’s engine in our tests). Choose{' '}
+                <strong>Fast natural</strong>, which does.{' '}
+              </>
+            )}
             Kokoro creates the most natural audio on this device, free and private. If it’s too slow on your phone, choose <strong>Fast natural</strong>. It downloads a 92 MB voice model once, then makes each chapter
             ahead of time. Making a chapter can take longer than listening to it, so start a few chapters (or the whole book) early and
             keep the app open while it works. Finished chapters keep playing with the screen locked and work offline. Highlighting: sentence by

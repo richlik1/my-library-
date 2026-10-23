@@ -234,7 +234,11 @@ export async function deleteAnnotation(id: string) {
 const CATEGORIES_VERSION = 2;
 
 export async function getSettings(): Promise<Settings> {
-  const s = (await (await db()).get('kv', 'settings')) as Partial<Settings> | undefined;
+  const stored = (await (await db()).get('kv', 'settings')) as (Partial<Settings> & { savedAt?: number }) | undefined;
+  // A change made just before the app closed may only have reached the instant copy.
+  const mirror = readSettingsMirror();
+  const { savedAt: _savedAt, ...fromDb } = stored ?? {};
+  const s: Partial<Settings> | undefined = mirror && mirror.at > (stored?.savedAt ?? 0) ? mirror.s : stored ? fromDb : undefined;
   const merged: Settings = { ...DEFAULT_SETTINGS, ...(s ?? {}) };
   // Add new default categories to an existing list once, keeping the user's own.
   if (s?.categories && (s.categoriesVersion ?? 1) < CATEGORIES_VERSION) {
@@ -244,8 +248,35 @@ export async function getSettings(): Promise<Settings> {
   return merged;
 }
 
+const SETTINGS_MIRROR = 'ml-settings';
+
+function readSettingsMirror(): { at: number; s: Partial<Settings> } | null {
+  try {
+    const v = JSON.parse(localStorage.getItem(SETTINGS_MIRROR) ?? 'null') as { at?: number; s?: Partial<Settings> } | null;
+    return v && typeof v.at === 'number' && v.s ? { at: v.at, s: v.s } : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Forgets the instant copy, so settings written straight to the database (a restored backup) are used. */
+export function clearSettingsMirror() {
+  try {
+    localStorage.removeItem(SETTINGS_MIRROR);
+  } catch {
+    /* private mode */
+  }
+}
+
+/** Saves settings to the database, and instantly to a small copy in case the app closes before the database write finishes. */
 export async function saveSettings(s: Settings) {
-  await (await db()).put('kv', s, 'settings');
+  const at = Date.now();
+  try {
+    localStorage.setItem(SETTINGS_MIRROR, JSON.stringify({ at, s }));
+  } catch {
+    /* private mode or full: the database copy still works */
+  }
+  await (await db()).put('kv', { ...s, savedAt: at }, 'settings');
 }
 
 // ---- Device storage ----------------------------------------------------------
