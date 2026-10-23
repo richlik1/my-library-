@@ -6,6 +6,7 @@ import type { Chapter, Position } from '../types';
 import { offsetAtTime, timeAtOffset } from './timing';
 import type { ChapterAudioMeta, ChunkTiming } from './types';
 import { partRanges } from './types';
+import { vlog } from './voiceLog';
 import { concatWavs, decodeWavInfo, encodeWav } from './wav';
 
 export interface AudioNarratorDeps {
@@ -26,6 +27,15 @@ function silentWavUrl(): string {
   if (!silentUrl) silentUrl = URL.createObjectURL(new Blob([encodeWav([new Float32Array(800)], 8000)], { type: 'audio/wav' }));
   return silentUrl;
 }
+
+// 2 s of silence, looped while the next audio is being made, so the phone keeps the app (and the voice) running.
+let bridgeUrl: string | null = null;
+function bridgeWavUrl(): string {
+  if (!bridgeUrl) bridgeUrl = URL.createObjectURL(new Blob([encodeWav([new Float32Array(16000)], 8000)], { type: 'audio/wav' }));
+  return bridgeUrl;
+}
+
+const hidden = () => (typeof document !== 'undefined' && document.hidden ? ' (screen off)' : '');
 
 /**
  * Plays generated chapter audio with a media element. Unlike live speech,
@@ -50,6 +60,8 @@ export class AudioNarrator implements PlaybackController {
   private sleepTimer: ReturnType<typeof setTimeout> | null = null;
   private destroyed = false;
   private pendingSeekTime: number | null = null;
+  /** Silence is playing while the next audio is made (since this time). */
+  private bridging: number | null = null;
 
   constructor(
     private readonly deps: AudioNarratorDeps,
@@ -125,8 +137,11 @@ export class AudioNarrator implements PlaybackController {
       if (autoplay) this.startAudio();
       else this.audio.pause();
     } else {
-      this.audio.pause();
-      if (autoplay) this.unlock();
+      if (autoplay && this.wantPlay && !this.audio.paused) this.bridge();
+      else {
+        this.audio.pause();
+        if (autoplay) this.unlock();
+      }
       void this.ensureLoaded(chapter).then((ok) => ok && this.wantPlay && this.state.chapter === chapter && this.startAudio());
     }
   }
@@ -187,8 +202,12 @@ export class AudioNarrator implements PlaybackController {
     }
   }
 
+  /** Back in the app: if the phone stopped the audio while it should be playing, continue. */
   handleVisible() {
-    /* media playback continues in the background; nothing to restart */
+    if (this.destroyed || !this.wantPlay || !this.audio.paused) return;
+    vlog(`player: back in the app; audio had stopped, continuing`);
+    if (this.chapterReady) this.startAudio();
+    else void this.ensureLoaded(this.state.chapter).then((ok) => ok && this.wantPlay && this.startAudio());
   }
 
   destroy() {
@@ -241,6 +260,20 @@ export class AudioNarrator implements PlaybackController {
     for (const l of this.listeners) l(this.state);
   }
 
+  /** Keeps the audio session alive with silence until the next audio is ready. */
+  private bridge() {
+    if (this.bridging !== null) return;
+    this.bridging = Date.now();
+    try {
+      this.audio.loop = true;
+      this.audio.src = bridgeWavUrl();
+      const p = this.audio.play();
+      if (p) p.catch((e: Error) => e?.name !== 'AbortError' && vlog(`player: silence while waiting was refused: ${e?.name ?? e}${hidden()}`));
+    } catch {
+      /* ignore */
+    }
+  }
+
   private unlock() {
     if (this.audio.src) return;
     try {
@@ -259,6 +292,7 @@ export class AudioNarrator implements PlaybackController {
     if (p)
       p.catch((e: Error) => {
         if (this.destroyed || !this.wantPlay) return;
+        vlog(`player: play refused: ${e?.name ?? e}${hidden()}`);
         this.wantPlay = false;
         this.set({
           status: 'paused',
@@ -290,6 +324,10 @@ export class AudioNarrator implements PlaybackController {
         if (!byPart.has(target)) {
           this.deps.requestAudio([chapter, chapter + 1].filter((c) => c < this.deps.chapters.length), this.state.offset);
           this.set({ waitingForAudio: true });
+          if (this.wantPlay) {
+            vlog(`player: waiting for chapter ${chapter + 1} audio to be made${hidden()}`);
+            if (!this.audio.paused) this.bridge();
+          }
           return false;
         }
         let from = target;
@@ -320,6 +358,10 @@ export class AudioNarrator implements PlaybackController {
       this.url = URL.createObjectURL(new Blob([concatWavs(wavs as ArrayBuffer[])], { type: 'audio/wav' }));
       this.timings = timings;
       this.pendingSeekTime = timeAtOffset(this.timings, this.state.offset);
+      if (this.bridging !== null && Date.now() - this.bridging > 1000)
+        vlog(`player: audio ready after ${((Date.now() - this.bridging) / 1000).toFixed(0)} s of waiting${hidden()}`);
+      this.bridging = null;
+      this.audio.loop = false;
       // Swap the source before marking it loaded, so the 'pause' this fires isn't taken as the user pausing.
       this.audio.src = this.url;
       this.run = {
@@ -346,7 +388,7 @@ export class AudioNarrator implements PlaybackController {
   }
 
   private onTime = () => {
-    if (this.run?.chapter !== this.state.chapter) return;
+    if (this.bridging !== null || this.run?.chapter !== this.state.chapter) return;
     const t = this.audio.currentTime;
     // Some browsers report 0 before applying a seek on a fresh source.
     if (this.pendingSeekTime !== null) {
@@ -361,13 +403,15 @@ export class AudioNarrator implements PlaybackController {
 
   private onEnded = () => {
     const run = this.run;
-    if (run?.chapter !== this.state.chapter) return;
+    if (this.bridging !== null || run?.chapter !== this.state.chapter) return;
     if (run.to < run.parts - 1) {
       // More of this chapter is coming: continue with the next part (or wait for it to be made).
       const chunks = this.chunksFor(run.chapter);
       const nextChunk = chunks[run.lastChunk + 1];
       if (nextChunk) {
         this.set({ offset: nextChunk.start, chunkIndex: run.lastChunk + 1, status: 'playing' });
+        // Play silence at once (inside the 'ended' event, which phones allow) until the next part is in.
+        this.bridge();
         void this.ensureLoaded(run.chapter).then((ok) => ok && this.wantPlay && this.state.chapter === run.chapter && this.startAudio());
         return;
       }
@@ -384,24 +428,29 @@ export class AudioNarrator implements PlaybackController {
       this.pause('Sleep timer: stopped at the end of the chapter.');
       return;
     }
+    this.bridge();
     this.seek({ chapter: next, offset: 0 }, true);
   };
 
   // Keep state in sync when the Lock Screen, headphones or the OS pause/resume playback.
   private onPauseEvent = () => {
-    if (this.audio.ended || !this.wantPlay || !this.chapterReady) return;
+    // Ignore the late 'pause' from swapping the source (playback has already started again).
+    if (this.audio.ended || !this.audio.paused || !this.wantPlay) return;
+    if (!this.chapterReady && this.bridging === null) return;
+    vlog(`player: paused by the system or headphones${hidden()}`);
     this.wantPlay = false;
     this.set({ status: 'paused' });
   };
 
   private onPlayEvent = () => {
-    if (!this.chapterReady) return;
+    if (!this.chapterReady || this.bridging !== null) return;
     this.wantPlay = true;
     if (this.state.status !== 'playing') this.set({ status: 'playing', notice: null });
   };
 
   private onError = () => {
-    if (!this.url || !this.audio.src.startsWith('blob:')) return;
+    if (!this.url || this.bridging !== null || this.audio.src !== this.url) return;
+    vlog(`player: audio error ${this.audio.error?.code ?? '?'}${hidden()}`);
     this.wantPlay = false;
     this.set({ status: 'paused', notice: 'This chapter’s audio could not be played. Try regenerating it in Voice & speed.' });
   };

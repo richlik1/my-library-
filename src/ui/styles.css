@@ -2250,7 +2250,8 @@ main.with-tabs .page {
 .whats-new li {
   margin-bottom: 10px;
 }
-.voice-log {
+.voice-log,
+.listening-log {
   white-space: pre-wrap;
   font-size: 11.5px;
   line-height: 1.45;

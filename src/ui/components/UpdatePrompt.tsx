@@ -69,6 +69,11 @@ export function UpdatePrompt() {
     <Sheet title={`What’s new in My Library ${__APP_VERSION__}`} onClose={() => setWhatsNew(false)}>
       <ul className="whats-new">
         <li>
+          <strong>Keeps playing:</strong> when the next part of a chapter isn’t ready yet, the player now waits (silently) and continues by
+          itself instead of stopping, so your phone keeps the app running. Coming back to the app restarts audio the phone stopped. Your place
+          is saved as you listen. If audio still stops, Settings → Sound check → <strong>Listening log</strong> shows why; copy it and send it.
+        </li>
+        <li>
           <strong>Voices fixed for Safari:</strong> the fast natural voice now uses a lighter engine (about 3× faster in testing, and a smaller
           download). If it gets stuck in the background on your phone, it switches to another way within 30 seconds and remembers it. This version
           was tested in Safari’s engine with the real voice before it was published. The other natural voice (Kokoro) still doesn’t work on

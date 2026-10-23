@@ -1,4 +1,4 @@
-import { vlog } from './kokoroEngine';
+import { vlog } from './voiceLog';
 import { DEFAULT_PIPER_VOICE, PIPER_HOST, PIPER_VOICES } from './piper';
 import type { PiperVoiceRunner } from './piperCore';
 import type { LoadProgress, NeuralEngine, SynthResult } from './types';

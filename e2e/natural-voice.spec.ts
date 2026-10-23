@@ -121,3 +121,45 @@ test('natural voice: a long chapter starts playing after its first sentences and
   await expect(page.locator('.chunk.active')).toContainText(/Sentence (1[0-9]|2[0-9]) /, { timeout: 30_000 });
   await expect(page.getByRole('button', { name: 'Pause' })).toBeVisible();
 });
+
+test('natural voice: when the voice is slower than listening, playback waits on silence and carries on by itself', async ({ page }) => {
+  // Each sentence takes 500 ms to make but only ~0.4 s to hear, so the player runs out of audio and has to wait.
+  await page.addInitScript(() => {
+    const w = window as unknown as Record<string, { synthesize: (t: string) => Promise<unknown> } & Record<string, unknown>>;
+    w.__MY_LIBRARY_TEST_ENGINE__.synthesize = async (text: string) => {
+      await new Promise((r) => setTimeout(r, 500));
+      const sr = 8000;
+      const s = new Float32Array(Math.round(text.length * 0.012 * sr));
+      for (let i = 0; i < s.length; i++) s[i] = 0.05 * Math.sin((2 * Math.PI * 220 * i) / sr);
+      return { samples: s, sampleRate: sr };
+    };
+  });
+  const sentences = Array.from({ length: 30 }, (_, i) => `Sentence ${i + 1} of the slow chapter.`).join(' ');
+  await page.goto('./');
+  await page.getByTestId('file-input').setInputFiles({ name: 'slow.txt', mimeType: 'text/plain', buffer: Buffer.from(`Chapter 1\n\n${sentences}\n\nChapter 2\n\nThe second chapter starts here.`) });
+  await page.getByRole('button', { name: 'Save to library' }).click();
+  await page.getByRole('button', { name: 'Open slow' }).click();
+  await page.getByRole('button', { name: /Voice/ }).click();
+  await page.getByRole('radio', { name: 'Natural voice' }).click();
+  await page.getByRole('button', { name: 'Close', exact: true }).click();
+  await page.getByTestId('play').click();
+  // It never stops by itself, and gets through the whole chapter and into the next one.
+  const seen = new Set<string>();
+  const t0 = Date.now();
+  while (!(await page.locator('.player-title .ct').textContent())?.includes('Chapter 2')) {
+    expect(Date.now() - t0, 'reached chapter 2 in time').toBeLessThan(60_000);
+    expect(await page.getByRole('button', { name: 'Pause' }).isVisible(), 'still playing').toBe(true);
+    seen.add((await page.locator('.chunk.active').textContent()) ?? '');
+    await page.waitForTimeout(250);
+  }
+  expect([...seen].some((t) => t.includes('Sentence 30 '))).toBe(true);
+  await expect(page.getByRole('button', { name: 'Pause' })).toBeVisible();
+  // The log says what happened, for troubleshooting on a phone.
+  await page.evaluate(() => (location.hash = '#/settings'));
+  await page.getByText('Listening log (if audio stopped by itself)').click();
+  await expect(page.locator('.listening-log')).toContainText('player: waiting for chapter 1 audio to be made');
+  // It is kept on the device, so it's still there after the app is closed and opened again.
+  await page.reload();
+  await page.getByText('Listening log (if audio stopped by itself)').click();
+  await expect(page.locator('.listening-log')).toContainText('player: audio ready after');
+});

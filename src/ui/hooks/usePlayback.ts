@@ -6,6 +6,7 @@ import { addListening, awardXp, getAudioWav, getChapterAudio, saveProgress, upda
 import { ListeningTracker, XP_RULES, xpIds } from '../../core/habits';
 import { habitsChanged } from './useHabits';
 import { audioQueue } from '../narration';
+import { vlog } from '../../core/audio/voiceLog';
 import type { Book, Chapter, NarrationEngine, Position } from '../../core/types';
 import { isSequenceEngine } from '../../core/speech/engine';
 import { speechEngine } from '../engine';
@@ -81,6 +82,7 @@ export function usePlayback(book: Book, chapters: Chapter[], start: Position, vo
               const made = (j.partsDone ?? 0) + (j.status === 'done' ? 1000 : 0);
               if (made === seenParts.get(j.chapter) || made === 0) return;
               seenParts.set(j.chapter, made);
+              if (document.hidden) vlog(`queue: made chapter ${j.chapter + 1} part ${j.partsDone ?? 0} of ${j.parts ?? '?'} (screen off)`);
               n.audioReady(j.chapter);
             }),
           )
@@ -121,6 +123,8 @@ export function usePlayback(book: Book, chapters: Chapter[], start: Position, vo
       tracker.flush();
     };
     const onVisibility = () => {
+      const s = n.getState();
+      vlog(`app ${document.hidden ? 'hidden' : 'visible'}: ${s.status}${s.waitingForAudio ? ', waiting for audio' : ''}, chapter ${s.chapter + 1}`);
       if (document.hidden) flush();
       else n.handleVisible();
     };

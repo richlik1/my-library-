@@ -178,6 +178,12 @@ export function SoundCheck() {
         )}
       </div>
 
+      <details style={{ marginTop: 10 }}>
+        <summary className="small">Listening log (if audio stopped by itself)</summary>
+        <p className="muted small">What the player and the voice did recently, newest last. Copy it and send it if the audio stopped.</p>
+        <ListeningLog />
+      </details>
+
       {(beep || speech || (natural && !natural.busy) || (fast && !fast.busy)) && (
         <details style={{ marginTop: 10 }} open={beep === 'no' || speech === 'no' || !!natural?.text.startsWith('Didn’t') || !!fast?.text.startsWith('Didn’t')}>
           <summary className="small">Results to send</summary>
@@ -198,5 +204,28 @@ export function SoundCheck() {
         </details>
       )}
     </section>
+  );
+}
+
+function ListeningLog() {
+  const toast = useToast();
+  const text = [navigator.userAgent, ...getVoiceLog()].join('\n');
+  return (
+    <>
+      <pre className="listening-log">{text}</pre>
+      <button
+        className="btn"
+        onClick={async () => {
+          try {
+            await navigator.clipboard.writeText(text);
+            toast('Copied. Paste it into your message.');
+          } catch {
+            toast('Couldn’t copy; take a screenshot instead', { kind: 'error' });
+          }
+        }}
+      >
+        Copy listening log
+      </button>
+    </>
   );
 }

@@ -53,13 +53,8 @@ const SYNTH_BASE_MS = 45_000;
 const SYNTH_PER_CHAR_MS = 600;
 const PROBE_MS = 45_000;
 
-/** What happened while starting and running the voice on this device (shown in Settings, for troubleshooting). */
-const voiceLog: string[] = [];
-export function vlog(line: string) {
-  voiceLog.push(`${new Date().toLocaleTimeString()} ${line}`);
-  if (voiceLog.length > 40) voiceLog.shift();
-}
-export const getVoiceLog = () => [...voiceLog];
+import { vlog } from './voiceLog';
+export { getVoiceLog, vlog } from './voiceLog';
 
 function savedMode(): VoiceMode | null {
   try {

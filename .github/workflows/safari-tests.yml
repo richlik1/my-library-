@@ -55,9 +55,9 @@ jobs:
           done
       - name: Build
         run: npm run build
-      - name: Required — sound check, audio playback and the real fast natural voice in WebKit
-        timeout-minutes: 15
-        run: npx playwright test e2e/sound.spec.ts e2e/piper-real.spec.ts e2e/natural-voice.spec.ts --project=iphone-safari --reporter=list --retries=0 --timeout=300000
+      - name: Required — sound check, audio playback, the real fast natural voice and 4 minutes of listening in WebKit
+        timeout-minutes: 20
+        run: npx playwright test e2e/sound.spec.ts e2e/piper-real.spec.ts e2e/piper-long.spec.ts e2e/natural-voice.spec.ts --project=iphone-safari --reporter=list --retries=0 --timeout=600000
       - name: Info — real Kokoro speed test in WebKit
         timeout-minutes: 12
         continue-on-error: true
