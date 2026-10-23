@@ -83,3 +83,22 @@ settings, real Lessac voice served locally:
 
 Cause of the earlier hang: not proven. The change that fixed it switched from ONNX Runtime’s WebGPU build to its plain WebAssembly build
 (also 3× faster in Chromium: 1.4× → 4.1×, and a 11 MB runtime instead of 22 MB). Not yet measured on an iPhone.
+
+## 2.4.0 — Voice start-up, responsiveness, phone experience
+
+Real Lessac voice, local runs (Chromium, iPhone-size viewport) and Safari engine CI (WebKit 26, iPhone 14 settings, macOS runner).
+Downloads served at ~4 MB/s to imitate a phone connection.
+
+| Check | Chromium (local) | WebKit (CI) |
+|---|---|---|
+| First use: Play → first sound, incl. 63 MB download | 21.3 s | 19.7 s |
+| Later app opens: Play → first sound (voice started in the background on launch) | 2.0 s (3.9 s without the background start) | 2.1 s |
+| After the Home “Get the natural voice” download: Play → first sound | 1.9 s | in CI |
+| Device voice offered during the first download, natural voice offered back when ready | Passed | Passed |
+| Longest wait for a tap while the voice makes audio | 4 ms (19 ms at 4× CPU slowdown) | 59 ms |
+| Pause stops the sound and stays stopped; Forward 30 s, Play work | Passed | Passed |
+| A stuck voice is reported, offers the device voice; screen stays responsive | Passed (40 ms at 4× slowdown) | one run 848 ms, earlier 109 ms; progress redraws since limited to 10/s |
+| 3.5 minutes of continuous listening across 3 chapters; place restored after restart | Passed (0 stalls) | Passed (0 stalls) |
+| Toasts never cover the top buttons | Passed | — |
+
+Measured times include up to ~1 s of test polling (the clock must reach 0:01). Not measured on an iPhone.
