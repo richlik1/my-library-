@@ -2275,3 +2275,7 @@ main.with-tabs .page {
 .check-step .btn {
   margin-top: 6px;
 }
+
+.seg-nav a.disabled {
+  opacity: 0.45;
+}

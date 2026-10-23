@@ -3,7 +3,9 @@ import type { VoiceInfo } from '../../core/speech/engine';
 import { isSequenceEngine } from '../../core/speech/engine';
 import type { PlaybackController } from '../../core/speech/controller';
 import type { NarratorState } from '../../core/speech/narrator';
-import { getBook, getContent, getProgress } from '../../core/storage/db';
+import { getBook, getContent, getProgress, updateBook } from '../../core/storage/db';
+import { DEFAULT_PIPER_VOICE } from '../../core/audio/piper';
+import { kokoroUnavailable } from '../narration';
 import type { Book, Chapter, Position } from '../../core/types';
 import { speechEngine } from '../engine';
 import { applyBookPreset } from '../presets';
@@ -44,8 +46,15 @@ export function usePlaybackSession(): PlaybackSession {
 }
 
 async function loadSession(id: string): Promise<Session | null> {
-  const [book, content, progress] = await Promise.all([getBook(id), getContent(id), getProgress(id)]);
+  const [stored, content, progress] = await Promise.all([getBook(id), getContent(id), getProgress(id)]);
+  let book = stored;
   if (!book || !content) return null;
+  if (book.narration?.engine === 'kokoro' && kokoroUnavailable()) {
+    // Kokoro doesn't work on this device: use the fast natural voice so the book reads.
+    const narration = { ...book.narration, engine: 'piper' as const, voice: DEFAULT_PIPER_VOICE };
+    await updateBook(id, { narration });
+    book = { ...book, narration };
+  }
   let start = progress && !progress.finished ? { chapter: progress.chapter, offset: progress.offset } : { chapter: 0, offset: 0 };
   // The iOS app also saves the position natively, which survives the app
   // being closed while narrating in the background. Use whichever is newer.

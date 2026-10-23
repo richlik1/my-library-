@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 import { speechStub } from './fixtures';
 // @ts-expect-error plain JS helper
 import { serveDir } from './model-server.mjs';
@@ -71,7 +71,66 @@ test('real Piper: a book plays with the fast natural voice', async ({ page }) =>
   await expect(page.locator('.chunk.active')).toBeVisible();
 });
 
-test('real Piper: a stuck background thread falls back to running on the page', async ({ page }) => {
+/** Longest time (ms) the page couldn't respond to a tap during `ms` of watching. */
+const worstTapDelay = (page: Page, ms: number) =>
+  page.evaluate(
+    (ms) =>
+      new Promise<number>((resolve) => {
+        let worst = 0;
+        let last = performance.now();
+        const t = setInterval(() => {
+          const now = performance.now();
+          worst = Math.max(worst, now - last - 50);
+          last = now;
+        }, 50);
+        setTimeout(() => {
+          clearInterval(t);
+          resolve(Math.round(worst));
+        }, ms);
+      }),
+    ms,
+  );
+
+test('real Piper: buttons respond and Pause stops the sound while the voice is making audio', async ({ page }) => {
+  test.setTimeout(5 * 60_000);
+  await page.goto('./');
+  const para = 'The lighthouse stood at the edge of the world. Every night its keeper climbed the long stairs to light the lamp.';
+  await page.getByTestId('file-input').setInputFiles({ name: 'buttons.txt', mimeType: 'text/plain', buffer: Buffer.from(`Chapter 1\n\n${Array(12).fill(para).join('\n\n')}\n\nChapter 2\n\n${Array(12).fill(para).join('\n\n')}`) });
+  await page.getByRole('button', { name: 'Save to library' }).click();
+  await page.getByRole('button', { name: 'Open buttons' }).click();
+  await page.getByRole('button', { name: 'Voice and speed' }).click();
+  await page.getByRole('radio', { name: 'Fast natural' }).click();
+  await page.getByRole('button', { name: 'Close', exact: true }).click();
+  await page.getByTestId('play').click();
+  const time = async () => (await page.locator('.scrub span').first().textContent())?.trim();
+  await expect.poll(time, { timeout: 4 * 60_000 }).not.toBe('0:00');
+
+  // The voice is making the rest of the book now; the page must stay responsive.
+  const worst = await worstTapDelay(page, 10_000);
+  console.log(`longest wait for a tap while the voice works: ${worst} ms`);
+  expect(worst).toBeLessThan(500);
+
+  // Pause stops the sound, and it stays stopped.
+  await page.getByRole('button', { name: 'Pause' }).click();
+  await expect(page.getByRole('button', { name: 'Play' })).toBeVisible({ timeout: 1000 });
+  const paused = await page.evaluate(() => [...document.querySelectorAll('audio')].every((a) => a.paused));
+  const at = await time();
+  await page.waitForTimeout(3000);
+  expect(await time()).toBe(at);
+  expect(paused).toBe(true);
+
+  // Other buttons work: forward 30 s, next chapter, play again.
+  await page.getByRole('button', { name: 'Forward 30 seconds' }).click();
+  await expect.poll(time).not.toBe(at);
+  await page.getByTestId('play').click();
+  await expect(page.getByRole('button', { name: 'Pause' })).toBeVisible({ timeout: 1000 });
+  const resumed = await time();
+  await expect.poll(time, { timeout: 15_000 }).not.toBe(resumed);
+  await page.getByRole('button', { name: 'Pause' }).click();
+  await expect(page.getByRole('button', { name: 'Play' })).toBeVisible({ timeout: 1000 });
+});
+
+test('real Piper: a stuck voice is reported, offers the device voice, and never freezes the screen', async ({ page }) => {
   test.setTimeout(5 * 60_000);
   await page.addInitScript(() => {
     (window as unknown as { __MY_LIBRARY_VOICE_HANG__: string }).__MY_LIBRARY_VOICE_HANG__ = 'piper';
@@ -80,11 +139,11 @@ test('real Piper: a stuck background thread falls back to running on the page', 
   const card = page.getByRole('region', { name: 'Sound check' });
   await card.getByRole('button', { name: 'Test fast natural voice' }).click();
   const status = card.getByRole('status').first();
-  try {
-    await expect(status).toContainText(/^(Works|Didn’t work)/, { timeout: 4 * 60_000 });
-  } finally {
-    console.log(`Piper fallback report:\n${await card.locator('.voice-log').textContent().catch(() => '(no log)')}`);
-  }
-  await expect(status).toContainText(/^Works\./);
-  await expect(card.locator('.voice-log')).toContainText('piper page: ready');
+  const worst = await worstTapDelay(page, 20_000);
+  console.log(`longest wait for a tap while the voice is stuck: ${worst} ms`);
+  expect(worst).toBeLessThan(500);
+  await expect(status).toContainText(/^(Works|Didn’t work)/, { timeout: 4 * 60_000 });
+  console.log(`stuck voice report:\n${await card.locator('.voice-log').textContent().catch(() => '(no log)')}`);
+  await expect(status).toContainText(/^Didn’t work/);
+  await expect(card.locator('.voice-log')).toContainText('piper: failed after');
 });

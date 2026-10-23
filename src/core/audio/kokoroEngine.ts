@@ -125,7 +125,8 @@ export class KokoroEngine implements NeuralEngine {
     const list: VoiceMode[] = [];
     if (canWorker && voiceThreads() > 1) list.push('threads');
     if (canWorker) list.push('single');
-    list.push('page');
+    // On the page the voice freezes every button for seconds per sentence, so only without workers.
+    if (!canWorker) list.push('page');
     return list;
   }
 

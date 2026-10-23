@@ -134,9 +134,13 @@ test('natural voice: when the voice is slower than listening, playback waits on 
       return { samples: s, sampleRate: sr };
     };
   });
+  if (process.env.CPU_SLOWDOWN) {
+    const cdp = await page.context().newCDPSession(page);
+    await cdp.send('Emulation.setCPUThrottlingRate', { rate: Number(process.env.CPU_SLOWDOWN) });
+  }
   const sentences = Array.from({ length: 30 }, (_, i) => `Sentence ${i + 1} of the slow chapter.`).join(' ');
   await page.goto('./');
-  await page.getByTestId('file-input').setInputFiles({ name: 'slow.txt', mimeType: 'text/plain', buffer: Buffer.from(`Chapter 1\n\n${sentences}\n\nChapter 2\n\nThe second chapter starts here.`) });
+  await page.getByTestId('file-input').setInputFiles({ name: 'slow.txt', mimeType: 'text/plain', buffer: Buffer.from(`Chapter 1\n\n${sentences}\n\nChapter 2\n\nThe second chapter starts here. ${Array.from({ length: 12 }, (_, i) => `Line ${i + 1} of the second chapter.`).join(' ')}`) });
   await page.getByRole('button', { name: 'Save to library' }).click();
   await page.getByRole('button', { name: 'Open slow' }).click();
   await page.getByRole('button', { name: /Voice/ }).click();
@@ -148,7 +152,11 @@ test('natural voice: when the voice is slower than listening, playback waits on 
   const t0 = Date.now();
   while (!(await page.locator('.player-title .ct').textContent())?.includes('Chapter 2')) {
     expect(Date.now() - t0, 'reached chapter 2 in time').toBeLessThan(60_000);
-    expect(await page.getByRole('button', { name: 'Pause' }).isVisible(), 'still playing').toBe(true);
+    if (!(await page.getByRole('button', { name: 'Pause' }).isVisible())) {
+      const log = await page.evaluate(() => localStorage.getItem('ml-voice-log'));
+      console.log(`stopped by itself; log:\n${(JSON.parse(log ?? '[]') as string[]).join('\n')}`);
+      expect(false, 'still playing').toBe(true);
+    }
     seen.add((await page.locator('.chunk.active').textContent()) ?? '');
     await page.waitForTimeout(250);
   }

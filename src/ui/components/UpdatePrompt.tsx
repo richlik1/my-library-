@@ -69,6 +69,11 @@ export function UpdatePrompt() {
     <Sheet title={`What’s new in My Library ${__APP_VERSION__}`} onClose={() => setWhatsNew(false)}>
       <ul className="whats-new">
         <li>
+          <strong>Buttons and Pause respond again:</strong> the voices no longer run on the same thread as the screen, which could freeze every
+          button for seconds while audio was being made. Books set to the other natural voice (Kokoro, which doesn’t work on iPhone) now use{' '}
+          <strong>Fast natural</strong> automatically.
+        </li>
+        <li>
           <strong>Keeps playing:</strong> when the next part of a chapter isn’t ready yet, the player now waits (silently) and continues by
           itself instead of stopping, so your phone keeps the app running. Coming back to the app restarts audio the phone stopped. Your place
           is saved as you listen. If audio still stops, Settings → Sound check → <strong>Listening log</strong> shows why; copy it and send it.

@@ -2,6 +2,7 @@ import { KokoroEngine, DEFAULT_KOKORO_VOICE, KOKORO_VOICES } from '../core/audio
 import { PiperEngine } from '../core/audio/piperEngine';
 import { DEFAULT_PIPER_VOICE, PIPER_VOICES } from '../core/audio/piper';
 import type { Book } from '../core/types';
+import { isIOS } from '../core/speech/webSpeechEngine';
 import { AudioQueue } from '../core/audio/queue';
 import type { LoadProgress, NeuralEngine } from '../core/audio/types';
 import { deleteAudio, getBook, getChapterAudio, getContent, getSettings, putAudio } from '../core/storage/db';
@@ -87,6 +88,14 @@ export const kokoroEngine = (): NeuralEngine & { runsIn: string; threads: number
 export function neuralEngine(kind: 'kokoro' | 'piper' = 'kokoro'): NeuralEngine {
   const test = (globalThis as { __MY_LIBRARY_TEST_ENGINE__?: NeuralEngine }).__MY_LIBRARY_TEST_ENGINE__;
   return test ?? (kind === 'piper' ? piperEngine : kokoroEngine());
+}
+
+/**
+ * Kokoro doesn't finish sentences in Safari's engine (tested in WebKit), so on iPhone and iPad books use the
+ * fast natural voice instead. (Automated tests with a stand-in engine can still pick it.)
+ */
+export function kokoroUnavailable(): boolean {
+  return isIOS() && !(globalThis as { __MY_LIBRARY_TEST_ENGINE__?: unknown }).__MY_LIBRARY_TEST_ENGINE__;
 }
 
 /** The fast natural voice (Piper). */

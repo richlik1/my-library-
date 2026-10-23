@@ -1,6 +1,5 @@
 import { vlog } from './voiceLog';
 import { DEFAULT_PIPER_VOICE, PIPER_HOST, PIPER_VOICES } from './piper';
-import type { PiperVoiceRunner } from './piperCore';
 import type { LoadProgress, NeuralEngine, SynthResult } from './types';
 
 type Reply =
@@ -10,31 +9,16 @@ type Reply =
   | { id: number; type: 'result'; samples: Float32Array; sampleRate: number }
   | { id: number; type: 'error'; message: string };
 
-/** Where the voice runs: a background thread, or (when a device's worker doesn't work) the page itself. */
-export type PiperMode = 'worker' | 'page';
-
-const MODE_KEY = 'ml-piper-mode';
 const LOAD_STALL_MS = 120_000;
 const PROBE_MS = 30_000;
 const SYNTH_BASE_MS = 30_000;
 const SYNTH_PER_CHAR_MS = 300;
 
-function savedMode(): PiperMode {
-  const forced = (globalThis as { __MY_LIBRARY_PIPER_MODE__?: PiperMode }).__MY_LIBRARY_PIPER_MODE__;
-  if (forced) return forced;
-  try {
-    return localStorage.getItem(MODE_KEY) === 'page' ? 'page' : 'worker';
-  } catch {
-    return 'worker';
-  }
-}
-
-function saveMode(m: PiperMode) {
-  try {
-    localStorage.setItem(MODE_KEY, m);
-  } catch {
-    /* private mode */
-  }
+/** Forget the page mode an earlier version may have saved. */
+try {
+  localStorage.removeItem('ml-piper-mode');
+} catch {
+  /* private mode */
 }
 
 function timeout<T>(p: Promise<T>, ms: number, message: string, onTimeout?: () => void): Promise<T> {
@@ -55,9 +39,7 @@ function timeout<T>(p: Promise<T>, ms: number, message: string, onTimeout?: () =
 export class PiperEngine implements NeuralEngine {
   readonly id = 'piper';
   readonly label = 'Piper fast natural voices';
-  private mode: PiperMode = savedMode();
   private worker: Worker | null = null;
-  private page: PiperVoiceRunner | null = null;
   private loadedVoice: string | null = null;
   private loading: Promise<void> | null = null;
   private loadingVoice: string | null = null;
@@ -75,14 +57,14 @@ export class PiperEngine implements NeuralEngine {
     return PIPER_VOICES;
   }
 
+  /** Always a background thread: on the page each sentence would freeze every button for seconds. */
   get runsIn() {
-    return this.loadedVoice ? this.mode : 'not loaded';
+    return this.loadedVoice ? 'worker' : 'not loaded';
   }
 
   private stop() {
     this.worker?.terminate();
     this.worker = null;
-    this.page = null;
     this.loadedVoice = null;
     for (const p of this.pending.values()) p.reject(new Error('The voice was restarted'));
     this.pending.clear();
@@ -116,10 +98,9 @@ export class PiperEngine implements NeuralEngine {
     };
   }
 
-  /** Loads the voice in the current mode and makes a test word, so a stuck voice is found before Play. */
-  private async loadIn(mode: PiperMode, urls: { modelUrl: string; configUrl: string; wasmPaths: string }, onProgress: (f: number, l: string) => void) {
+  /** Loads the voice in a fresh background thread and makes a test word, so a stuck voice is found before Play. */
+  private async loadInWorker(urls: { modelUrl: string; configUrl: string; wasmPaths: string }, onProgress: (f: number, l: string) => void) {
     this.stop();
-    this.mode = mode;
     let stall: ReturnType<typeof setTimeout> | null = null;
     let fail: (e: Error) => void = () => undefined;
     const stalled = new Promise<never>((_, rej) => (fail = rej));
@@ -133,23 +114,16 @@ export class PiperEngine implements NeuralEngine {
     };
     arm();
     try {
-      if (mode === 'worker') {
-        this.startWorker();
-        const hang = (globalThis as { __MY_LIBRARY_VOICE_HANG__?: string }).__MY_LIBRARY_VOICE_HANG__ === 'piper';
-        await Promise.race([this.call({ type: 'load', ...urls, hang }, progress), stalled]);
-      } else {
-        const { PiperVoiceRunner } = await import('./piperCore');
-        const runner = new PiperVoiceRunner((line) => vlog(`piper page: ${line}`));
-        await Promise.race([runner.load(urls.modelUrl, urls.configUrl, urls.wasmPaths, progress), stalled]);
-        this.page = runner;
-      }
+      this.startWorker();
+      const hang = (globalThis as { __MY_LIBRARY_VOICE_HANG__?: string }).__MY_LIBRARY_VOICE_HANG__ === 'piper';
+      await Promise.race([this.call({ type: 'load', ...urls, hang }, progress), stalled]);
     } finally {
       if (stall) clearTimeout(stall);
     }
     onProgress(1, 'Making a test word…');
     const t = Date.now();
     await timeout(this.raw('Hi.'), PROBE_MS, 'The voice got stuck on a test word', () => this.stop());
-    vlog(`piper ${mode}: test word in ${((Date.now() - t) / 1000).toFixed(1)} s`);
+    vlog(`piper: test word in ${((Date.now() - t) / 1000).toFixed(1)} s`);
   }
 
   load(onProgress?: LoadProgress, voiceId = this.voice): Promise<void> {
@@ -160,23 +134,22 @@ export class PiperEngine implements NeuralEngine {
       const v = PIPER_VOICES.find((x) => x.id === voiceId) ?? PIPER_VOICES[0];
       const host = (globalThis as { __MY_LIBRARY_PIPER_HOST__?: string }).__MY_LIBRARY_PIPER_HOST__ ?? PIPER_HOST;
       const urls = { modelUrl: `${host}${v.path}.onnx`, configUrl: `${host}${v.path}.onnx.json`, wasmPaths: new URL('ort/', document.baseURI).href };
-      const modes: PiperMode[] = savedMode() === 'page' ? ['page'] : ['worker', 'page'];
-      vlog(`piper ${v.id}: start in ${modes.join(' > ')}; isolated=${typeof crossOriginIsolated !== 'undefined' && crossOriginIsolated}, cores=${navigator.hardwareConcurrency}`);
+      vlog(`piper ${v.id}: start; isolated=${typeof crossOriginIsolated !== 'undefined' && crossOriginIsolated}, cores=${navigator.hardwareConcurrency}`);
       try {
-        for (let i = 0; i < modes.length; i++) {
+        // A stuck background thread gets one fresh restart.
+        for (let attempt = 1; ; attempt++) {
           const t0 = Date.now();
           try {
-            await this.loadIn(modes[i], urls, (f, l) => onProgress?.(f, l));
-            vlog(`piper ${modes[i]}: ready in ${((Date.now() - t0) / 1000).toFixed(1)} s`);
-            if (modes[i] === 'page') saveMode('page');
+            await this.loadInWorker(urls, (f, l) => onProgress?.(f, l));
+            vlog(`piper: ready in ${((Date.now() - t0) / 1000).toFixed(1)} s`);
             this.loadedVoice = v.id;
             onProgress?.(1, 'Voice ready');
             return;
           } catch (e) {
-            vlog(`piper ${modes[i]}: failed after ${((Date.now() - t0) / 1000).toFixed(0)} s: ${(e as Error).message}`);
+            vlog(`piper: failed after ${((Date.now() - t0) / 1000).toFixed(0)} s: ${(e as Error).message}`);
             this.stop();
-            if (i === modes.length - 1) throw e;
-            onProgress?.(0, 'Trying another way to run the voice…');
+            if (attempt === 2) throw e;
+            onProgress?.(0, 'Restarting the voice…');
           }
         }
       } finally {
@@ -186,9 +159,8 @@ export class PiperEngine implements NeuralEngine {
     return this.loading;
   }
 
-  /** One sentence in the loaded runner, without loading or time limits. */
+  /** One sentence in the loaded voice, without loading or time limits. */
   private async raw(text: string): Promise<SynthResult> {
-    if (this.page) return this.page.synth(text);
     if (!this.worker) throw new Error('Voice not loaded');
     const r = await this.call({ type: 'synth', text });
     if (r.type !== 'result') throw new Error('No audio returned');
@@ -199,7 +171,7 @@ export class PiperEngine implements NeuralEngine {
     const run = async (): Promise<SynthResult> => {
       await this.load(undefined, PIPER_VOICES.some((v) => v.id === voice) ? voice : this.voice);
       return timeout(this.raw(text), SYNTH_BASE_MS + text.length * SYNTH_PER_CHAR_MS, 'The fast voice stopped responding', () => {
-        vlog(`piper ${this.mode}: a sentence took too long; restarting the voice`);
+        vlog('piper: a sentence took too long; restarting the voice');
         this.stop();
       });
     };

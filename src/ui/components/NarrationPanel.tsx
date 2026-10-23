@@ -8,11 +8,10 @@ import { downloadBlob, safeName } from './PlayerSheets';
 import type { Book, Chapter } from '../../core/types';
 import { useToast } from '../hooks/toast';
 import { hasWebGPU } from '../../core/audio/kokoroEngine';
-import { audioQueue, kokoroDevice, naturalVoiceFor, neuralEngine, setKokoroDevice } from '../narration';
+import { audioQueue, kokoroDevice, kokoroUnavailable, naturalVoiceFor, neuralEngine, setKokoroDevice } from '../narration';
 import { PIPER_VOICES } from '../../core/audio/piper';
 import { formatBytes } from './BookDetailsSheet';
 import { Icon } from './Icon';
-import { isIOS } from '../../core/speech/webSpeechEngine';
 import { useSettings } from '../hooks/settings';
 import { activePreset, allPresets, choosePreset, newPresetId } from '../presets';
 import { SOUNDSCAPES, ambient } from '../ambient';
@@ -149,9 +148,11 @@ export function NarrationPanel({
           href="#"
           role="radio"
           aria-checked={mode === 'kokoro'}
-          className={mode === 'kokoro' ? 'active' : ''}
+          aria-disabled={kokoroUnavailable() || undefined}
+          className={mode === 'kokoro' ? 'active' : kokoroUnavailable() ? 'disabled' : ''}
           onClick={(e) => {
             e.preventDefault();
+            if (kokoroUnavailable()) return toast('This voice doesn’t work on iPhone yet. Use Fast natural.');
             void setNarration({ engine: 'kokoro' });
           }}
         >
@@ -174,7 +175,7 @@ export function NarrationPanel({
             </p>
           ) : (
           <p className="muted small" style={{ marginTop: 0 }}>
-            {isIOS() && (
+            {kokoroUnavailable() && (
               <>
                 <strong>On iPhone and iPad this voice doesn’t work yet</strong> (it doesn’t finish in Safari’s engine in our tests). Choose{' '}
                 <strong>Fast natural</strong>, which does.{' '}
