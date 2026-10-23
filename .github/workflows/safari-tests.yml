@@ -44,7 +44,7 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npx playwright install webkit
-      - name: Download voices (Piper Lessac, Kokoro q8)
+      - name: Download voices (Piper Lessac, Kokoro q8 for the Chromium-only Kokoro tests)
         run: |
           d=voices/piper/en/en_US/lessac/medium
           mkdir -p $d voices/kokoro/onnx
@@ -58,10 +58,6 @@ jobs:
       - name: Required — sound check, audio playback, the real fast natural voice and 4 minutes of listening in WebKit
         timeout-minutes: 25
         run: npx playwright test e2e/sound.spec.ts e2e/piper-real.spec.ts e2e/piper-long.spec.ts e2e/piper-startup.spec.ts e2e/natural-voice.spec.ts --project=iphone-safari --reporter=list --retries=0 --timeout=600000
-      - name: Info — real Kokoro speed test in WebKit
-        timeout-minutes: 12
-        continue-on-error: true
-        run: npx playwright test e2e/kokoro-real.spec.ts --project=iphone-safari --reporter=list --retries=0 -g "speed test" --timeout=480000
       - name: Info — everything else in WebKit
         timeout-minutes: 12
         continue-on-error: true
