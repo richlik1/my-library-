@@ -1,0 +1,54 @@
+# Runs the whole test suite, including the real voice models, in WebKit
+# (Safari's engine) with iPhone settings, on Linux and on macOS.
+name: Safari engine tests
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'e2e/**'
+      - 'playwright.config.ts'
+      - '.github/workflows/safari-tests.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  webkit:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps webkit
+      - name: Download voices (Piper Lessac, Kokoro q8)
+        run: |
+          d=voices/piper/en/en_US/lessac/medium
+          mkdir -p $d voices/kokoro/onnx
+          curl -sSfL -o $d/en_US-lessac-medium.onnx https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/lessac/medium/en_US-lessac-medium.onnx
+          curl -sSfL -o $d/en_US-lessac-medium.onnx.json https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/lessac/medium/en_US-lessac-medium.onnx.json
+          for f in config.json tokenizer.json tokenizer_config.json onnx/model_quantized.onnx; do
+            curl -sSfL -o voices/kokoro/$f https://huggingface.co/onnx-community/Kokoro-82M-v1.0-ONNX/resolve/main/$f
+          done
+      - name: All tests in WebKit (iPhone 14 settings)
+        env:
+          PW_WEBKIT: '1'
+          PIPER_MODEL_DIR: ${{ github.workspace }}/voices/piper
+          KOKORO_TEST_MODEL_DIR: ${{ github.workspace }}/voices/kokoro
+        run: npx playwright test --project=iphone-safari --reporter=list --retries=0
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: webkit-results-${{ matrix.os }}
+          path: test-results/
+          retention-days: 7

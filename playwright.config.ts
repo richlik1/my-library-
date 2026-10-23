@@ -11,6 +11,8 @@ export default defineConfig({
   projects: [
     { name: 'desktop', use: { ...devices['Desktop Chrome'] } },
     { name: 'iphone-size', use: { ...devices['Desktop Chrome'], viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: false } },
+    // Safari's engine with iPhone settings. Needs `npx playwright install webkit`; run with PW_WEBKIT=1 (CI does).
+    ...(process.env.PW_WEBKIT ? [{ name: 'iphone-safari', use: { ...devices['iPhone 14'] } }] : []),
   ],
   webServer: {
     command: 'npm run build && npx vite preview --port 4173 --strictPort',
