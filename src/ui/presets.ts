@@ -1,13 +1,15 @@
-import { DEFAULT_KOKORO_VOICE } from '../core/audio/kokoroEngine';
 import { updateBook } from '../core/storage/db';
 import type { Book, NarratorPreset, Settings } from '../core/types';
 
-/** Ready-made presets. All use natural voices, which keep playing with the screen locked. */
+/**
+ * Ready-made presets. They use the fast natural voice (Piper): it keeps playing
+ * with the screen locked and is fast enough to keep up with listening on phones.
+ */
 export const BUILT_IN_PRESETS: NarratorPreset[] = [
-  { id: 'deep-focus', name: 'Deep Focus', engine: 'kokoro', voice: 'af_heart', rate: 1, pause: 'normal' },
-  { id: 'business', name: 'Business Learning', engine: 'kokoro', voice: 'am_michael', rate: 1.25, pause: 'short' },
-  { id: 'relaxed', name: 'Relaxed Listening', engine: 'kokoro', voice: 'af_bella', rate: 0.9, pause: 'long' },
-  { id: 'fast-review', name: 'Fast Review', engine: 'kokoro', voice: 'af_heart', rate: 1.5, pause: 'short' },
+  { id: 'deep-focus', name: 'Deep Focus', engine: 'piper', voice: 'en_US-lessac-medium', rate: 1, pause: 'normal' },
+  { id: 'business', name: 'Business Learning', engine: 'piper', voice: 'en_US-ryan-medium', rate: 1.25, pause: 'short' },
+  { id: 'relaxed', name: 'Relaxed Listening', engine: 'piper', voice: 'en_US-amy-medium', rate: 0.9, pause: 'long' },
+  { id: 'fast-review', name: 'Fast Review', engine: 'piper', voice: 'en_US-lessac-medium', rate: 1.5, pause: 'short' },
 ];
 
 export const allPresets = (settings: Settings): NarratorPreset[] => [...BUILT_IN_PRESETS, ...(settings.presets ?? [])];
@@ -21,7 +23,7 @@ export function activePreset(book: Book, settings: Settings): NarratorPreset | n
   const n = book.narration;
   const same =
     (n?.engine ?? 'device') === p.engine &&
-    (p.engine === 'device' || (n?.voice ?? DEFAULT_KOKORO_VOICE) === p.voice) &&
+    (p.engine === 'device' || n?.voice === p.voice) &&
     (n?.pause ?? settings.narrationPause) === p.pause &&
     Math.abs(settings.rate - p.rate) < 0.01;
   return same ? p : null;
@@ -48,7 +50,7 @@ export async function choosePreset(
   const regenerates =
     preset.engine !== 'device' &&
     before?.engine === preset.engine &&
-    ((before.voice ?? DEFAULT_KOKORO_VOICE) !== preset.voice || (before.pause ?? settings.narrationPause) !== preset.pause);
+    (before.voice !== preset.voice || (before.pause ?? settings.narrationPause) !== preset.pause);
   const narration = { engine: preset.engine, voice: preset.voice ?? before?.voice, pause: preset.pause, presetId: preset.id };
   const next = (await updateBook(book.id, { narration })) ?? { ...book, narration };
   update({ rate: preset.rate });

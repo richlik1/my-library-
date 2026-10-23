@@ -312,7 +312,7 @@ function PlayerView({ autoplay, at }: { autoplay: boolean; at?: { chapter: numbe
           <div className="notice">
             <Icon name="info" size={20} />
             <span>
-              Device voices stop when the iPhone locks. To listen with the screen locked, choose <strong>Natural voice</strong> in Voice &amp;
+              Device voices stop when the iPhone locks. To listen with the screen locked, choose <strong>Fast natural</strong> in Voice &amp;
               speed.
             </span>
             <button

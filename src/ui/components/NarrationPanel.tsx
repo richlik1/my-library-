@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
-import { DEFAULT_KOKORO_VOICE, KOKORO_VOICES } from '../../core/audio/kokoroEngine';
+import { KOKORO_VOICES } from '../../core/audio/kokoroEngine';
 import type { Job } from '../../core/audio/queue';
 import { encodeWav } from '../../core/audio/wav';
 import { audioCacheBytes, deleteBookAudio, deleteChapterAudio, getChapterWav, listBookAudio, updateBook } from '../../core/storage/db';
@@ -341,7 +341,7 @@ function PresetPicker({ book, onBookChange }: { book: Book; onBookChange(b: Book
   const [name, setName] = useState('');
   const active = activePreset(book, settings);
   const presets = allPresets(settings);
-  const voiceName = (id?: string) => KOKORO_VOICES.find((v) => v.id === id)?.name ?? 'Device voice';
+  const voiceName = (id?: string) => [...KOKORO_VOICES, ...PIPER_VOICES].find((v) => v.id === id)?.name ?? 'Device voice';
 
   const pick = async (id: string) => {
     const preset = presets.find((p) => p.id === id)!;
@@ -363,7 +363,7 @@ function PresetPicker({ book, onBookChange }: { book: Book; onBookChange(b: Book
       id: newPresetId(),
       name: n,
       engine,
-      voice: engine === 'kokoro' ? (book.narration?.voice ?? DEFAULT_KOKORO_VOICE) : undefined,
+      voice: engine !== 'device' ? naturalVoiceFor(book) : undefined,
       rate: settings.rate,
       pause: book.narration?.pause ?? settings.narrationPause,
     };
@@ -384,7 +384,7 @@ function PresetPicker({ book, onBookChange }: { book: Book; onBookChange(b: Book
           <button key={p.id} className="preset" aria-pressed={active?.id === p.id} onClick={() => pick(p.id)}>
             <strong>{p.name}</strong>
             <small>
-              {p.engine === 'kokoro' ? voiceName(p.voice) : 'Device voice'} · {p.rate}× · {p.pause} pauses
+              {p.engine !== 'device' ? voiceName(p.voice) : 'Device voice'} · {p.rate}× · {p.pause} pauses
             </small>
           </button>
         ))}

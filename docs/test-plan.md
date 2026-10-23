@@ -55,3 +55,15 @@ public-domain books (Project Gutenberg EPUB/PDF) should be added in M3, since ge
 | Audio Session API set to “playback” (Safari 17+), so Silent mode no longer mutes speech/Web Audio | — (Chromium has no Audio Session API) | **Not tested** — owner’s screenshots show Silent mode on |
 | Settings → Sound check: beep (audio file), device voice, natural voice; copyable results | `e2e/sound.spec.ts` **Passed** | Owner to run |
 | Player offers “Use device voice instead” when natural voice fails | `e2e/sound.spec.ts` **Passed** | Not tested |
+
+## 2.3 — Fast natural voice (Piper)
+
+Real models, run by `.github/workflows/voice-tests.yml` on a GitHub-hosted runner (Chromium, 4 vCPU), run #1, 2026-10-23:
+
+| Engine | Speed (speech made per second of work) | First sound after Play, first use | Result |
+|---|---|---|---|
+| Piper Lessac medium, 1 thread | **1.4×** (8.9 s of speech in 6.1 s) | **9.0 s** | Passed |
+| Kokoro q8, 3 threads | 0.4× (10.3 s in 26.0 s) | 13.0 s | Passed |
+| Kokoro stuck-mode fallback | switched threads → single, completed | — | Passed |
+
+Not measured on iPhone. Built-in presets now use Piper.

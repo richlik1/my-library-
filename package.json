@@ -1,7 +1,7 @@
 {
   "name": "my-library",
   "private": true,
-  "version": "2.3.0",
+  "version": "2.3.1",
   "description": "My Library — a private, offline, free audiobook player for your own PDF, EPUB, DOCX and TXT books.",
   "type": "module",
   "scripts": {

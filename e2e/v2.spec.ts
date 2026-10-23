@@ -54,9 +54,9 @@ test('narrator presets switch in one tap and are remembered for the book after a
   await page.getByRole('button', { name: 'Voice and speed' }).click();
   await page.getByRole('button', { name: /^Business Learning/ }).click();
   await expect(page.getByRole('button', { name: /^Business Learning/ })).toHaveAttribute('aria-pressed', 'true');
-  await expect(page.getByRole('radio', { name: 'Natural voice' })).toHaveAttribute('aria-checked', 'true');
+  await expect(page.getByRole('radio', { name: 'Fast natural' })).toHaveAttribute('aria-checked', 'true');
   await page.getByRole('button', { name: 'Close', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Voice and speed' })).toContainText('1.25× · Michael');
+  await expect(page.getByRole('button', { name: 'Voice and speed' })).toContainText('1.25× · Ryan');
 
   // Another speed for the app in general, then restart and reopen the book.
   await page.reload();
