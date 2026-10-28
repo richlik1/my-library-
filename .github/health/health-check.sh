@@ -54,7 +54,7 @@ if [ -n "${GH_TOKEN:-}" ] && [ -n "${GITHUB_REPOSITORY:-}" ]; then
     while IFS=$'\t' read -r name last streak when url; do
       [ -z "$name" ] && continue
       if [ "$last" = "failure" ]; then
-        row FAIL "Workflow: $name" "last run failed ($when); $streak failed in a row on \`$default_branch\` · [run]($url)"
+        row FAIL "Workflow: $name" "last run failed ($when); the last $streak runs read all failed on \`$default_branch\` · [run]($url)"
       elif [ "$last" = "success" ]; then
         row PASS "Workflow: $name" "last run passed ($when)"
       else
@@ -105,7 +105,10 @@ if [ -n "${GITLEAKS:-}" ] && [ -x "${GITLEAKS}" ]; then
       row PASS "Secret scan (gitleaks, full history)" "no findings"
     else
       where=$(jq -r '[.[] | "\(.RuleID) in \(.File) @\(.Commit[0:7])"] | unique | .[0:8] | join("; ")' "$LOGDIR/gitleaks.json")
-      row FAIL "Secret scan (gitleaks, full history)" "$n finding(s): $where"
+      # Fingerprints hold no secret; once a finding is confirmed harmless,
+      # its line can go in .gitleaksignore with a comment saying why.
+      jq -r '.[].Fingerprint' "$LOGDIR/gitleaks.json" > "$LOGDIR/gitleaks-fingerprints.txt"
+      row FAIL "Secret scan (gitleaks, full history)" "$n finding(s): $where · fingerprints in the artifact (gitleaks-fingerprints.txt)"
     fi
   else
     row WARN "Secret scan (gitleaks, full history)" "scan did not produce a report: $(tail -3 "$LOGDIR/gitleaks.log" | esc)"
