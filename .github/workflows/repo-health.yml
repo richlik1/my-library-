@@ -22,7 +22,7 @@ on:
   workflow_dispatch: {}
   push:
     branches: ["claude/portfolio-audit-roadmaps-jnc0z5"]
-    paths: [".github/workflows/repo-health.yml", ".github/health/**"]
+    paths: [".github/workflows/repo-health.yml", ".github/health/**", ".gitleaksignore"]
 
 permissions:
   contents: read       # check out the code
