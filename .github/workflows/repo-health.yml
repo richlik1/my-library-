@@ -1,0 +1,107 @@
+name: Repository health
+
+# Weekly read-only health report: CI on the default branch, open pull requests,
+# install/test/build of a fresh checkout, dependency audit, committed .env files
+# and a gitleaks secret scan of the full history. Writes the run summary and
+# updates one "Repository health report" issue in place (no new issue per run).
+#
+# Activation: the weekly schedule and the manual "Run workflow" button only work
+# once this file is on the default branch, so nothing runs on a schedule until
+# the owner merges it. The push trigger below is limited to the review branch,
+# so the pull request can prove the workflow works before anyone approves it.
+#
+# Safeguards: no secrets beyond the built-in GITHUB_TOKEN, minimum permissions,
+# every action pinned to a full commit SHA, gitleaks downloaded at a pinned
+# version and checked against its published SHA-256, findings redacted, no
+# deploy/publish/merge steps, no paid or AI services, a 20-minute cap, and it
+# never runs for pull requests from forks.
+
+on:
+  schedule:
+    - cron: "17 13 * * 1" # Mondays 13:17 UTC
+  workflow_dispatch: {}
+  push:
+    branches: ["claude/portfolio-audit-roadmaps-jnc0z5"]
+    paths: [".github/workflows/repo-health.yml", ".github/health/**", ".gitleaksignore"]
+
+permissions:
+  contents: read       # check out the code
+  actions: read        # read workflow run results
+  pull-requests: read  # count open pull requests
+  issues: write        # update the single health-report issue
+
+concurrency:
+  group: repo-health
+  cancel-in-progress: false
+
+jobs:
+  health:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      GITLEAKS_VERSION: "8.30.0"
+      GITLEAKS_SHA256: "79a3ab579b53f71efd634f3aaf7e04a0fa0cf206b7ed434638d1547a2470a66e"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # full history for the secret scan
+          persist-credentials: false
+
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: "22"
+
+      - name: Install gitleaks (pinned, checksum-verified)
+        run: |
+          f="gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          curl -sSfL -o "$RUNNER_TEMP/$f" "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/$f"
+          echo "${GITLEAKS_SHA256}  $RUNNER_TEMP/$f" | sha256sum -c -
+          tar -xzf "$RUNNER_TEMP/$f" -C "$RUNNER_TEMP" gitleaks
+          echo "GITLEAKS=$RUNNER_TEMP/gitleaks" >> "$GITHUB_ENV"
+
+      - name: Health check
+        id: health
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEALTH_SELF: Repository health
+          HEALTH_DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          HEALTH_APP_DIR: "."
+          HEALTH_INSTALL: "npm ci --no-audit --no-fund"
+          HEALTH_AUDIT: "npm"
+          HEALTH_CHECKS: |
+            Unit tests::npx vitest run
+            Typecheck and build::npm run build
+        run: |
+          set +e
+          bash .github/health/health-check.sh
+          echo "exit=$?" >> "$GITHUB_OUTPUT"
+          cat health-report.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Update the health-report issue
+        if: always() && github.event_name != 'push' && steps.health.outcome != 'skipped'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          title="Repository health report"
+          n=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "in:title \"$title\"" --json number,title \
+                --jq "map(select(.title == \"$title\")) | first | .number // empty")
+          if [ -n "$n" ]; then
+            gh issue edit "$n" --repo "$GITHUB_REPOSITORY" --body-file health-report.md
+          else
+            gh issue create --repo "$GITHUB_REPOSITORY" --title "$title" --body-file health-report.md
+          fi
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: health-report
+          path: |
+            health-report.md
+            health-logs/
+          retention-days: 30
+
+      - name: Fail when a check failed
+        if: steps.health.outputs.exit != '0'
+        run: |
+          echo "::error::One or more health checks failed. See the run summary."
+          exit 1
