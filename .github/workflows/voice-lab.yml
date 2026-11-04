@@ -9,7 +9,7 @@ on:
     branches: [voice-lab]
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   lab:
@@ -26,10 +26,24 @@ jobs:
           python-version: '3.11'
       - run: npm ci
       - run: npm i -g bun@1.4.4
-      - run: pip install -q torch torchaudio --index-url https://download.pytorch.org/whl/cpu
+      - run: pip install -q numpy torch torchaudio --index-url https://download.pytorch.org/whl/cpu
       - name: Make and score every voice
         working-directory: scripts/voice-lab
         run: ./run.sh out
+      - name: Save results and short samples (Opus, mono) to the voice-lab branch
+        if: github.ref == 'refs/heads/voice-lab'
+        run: |
+          mkdir -p scripts/voice-lab/samples
+          cp scripts/voice-lab/out/results.json scripts/voice-lab/samples/
+          for w in scripts/voice-lab/out/*.wav; do
+            case "$w" in *.raw.wav) continue;; esac
+            ffmpeg -loglevel error -y -i "$w" -t 9 -ac 1 -c:a libopus -b:a 24k "scripts/voice-lab/samples/$(basename "$w" .wav).ogg" || true
+            ffmpeg -loglevel error -y -i "$w" -t 9 -ac 1 -c:a aac -b:a 40k "scripts/voice-lab/samples/$(basename "$w" .wav).m4a" || true
+          done
+          git config user.name "voice-lab"
+          git config user.email "voice-lab@users.noreply.github.com"
+          git add scripts/voice-lab/samples
+          git commit -m "Voice lab results and samples [skip ci]" && git push || true
       - uses: actions/upload-artifact@v4
         with:
           name: voice-lab
