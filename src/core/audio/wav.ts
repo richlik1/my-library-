@@ -48,6 +48,63 @@ export function trimSilence(samples: Float32Array, threshold = 0.003): Float32Ar
   return samples.subarray(a, b);
 }
 
+/**
+ * Makes one synthesized sentence sound like part of a recording:
+ * - trims silence by loudness over 10 ms windows, keeping a margin so quiet sounds (h, s, f) aren't clipped;
+ * - removes DC offset; evens out loudness (target RMS, never clipping);
+ * - fades in and out briefly so there are no clicks where sentences meet.
+ */
+export function polishSpeech(input: Float32Array, sampleRate: number, opts: { targetRms?: number } = {}): Float32Array {
+  const win = Math.max(1, Math.round(sampleRate * 0.01));
+  const windows = Math.ceil(input.length / win);
+  if (!input.length) return input;
+  let mean = 0;
+  for (const x of input) mean += x;
+  mean /= input.length;
+  const rms = (w: number) => {
+    let s = 0;
+    const end = Math.min(input.length, (w + 1) * win);
+    for (let i = w * win; i < end; i++) s += (input[i] - mean) ** 2;
+    return Math.sqrt(s / Math.max(1, end - w * win));
+  };
+  const levels = Array.from({ length: windows }, (_, w) => rms(w));
+  const peakLevel = Math.max(...levels);
+  if (peakLevel < 1e-4) return new Float32Array(0);
+  const gate = peakLevel * 0.04; // about -28 dB below the loudest part
+  let first = levels.findIndex((l) => l > gate);
+  let last = levels.length - 1 - [...levels].reverse().findIndex((l) => l > gate);
+  // Keep 30 ms before and 60 ms after the speech.
+  const a = Math.max(0, (first - 3) * win);
+  const b = Math.min(input.length, (last + 7) * win);
+  first = a;
+  last = b;
+  const out = new Float32Array(last - first);
+  for (let i = 0; i < out.length; i++) out[i] = input[first + i] - mean;
+  // Loudness of the voiced part only (pauses don't count).
+  let sum = 0;
+  let count = 0;
+  for (let w = 0; w < levels.length; w++)
+    if (levels[w] > gate * 2) {
+      sum += levels[w] ** 2;
+      count++;
+    }
+  const voicedRms = Math.sqrt(sum / Math.max(1, count));
+  let peak = 0;
+  for (const x of out) peak = Math.max(peak, Math.abs(x));
+  const target = opts.targetRms ?? 0.1; // about -20 dBFS
+  const gain = Math.min(target / Math.max(voicedRms, 1e-6), 0.95 / Math.max(peak, 1e-6), 4);
+  const fadeIn = Math.min(out.length, Math.round(sampleRate * 0.01));
+  const fadeOut = Math.min(out.length, Math.round(sampleRate * 0.03));
+  for (let i = 0; i < out.length; i++) {
+    let g = gain;
+    if (i < fadeIn) g *= i / fadeIn;
+    const fromEnd = out.length - 1 - i;
+    if (fromEnd < fadeOut) g *= fromEnd / fadeOut;
+    out[i] *= g;
+  }
+  return out;
+}
+
 /** Joins 16-bit mono WAV files with the same sample rate into one. */
 export function concatWavs(files: ArrayBuffer[]): ArrayBuffer {
   if (files.length === 1) return files[0];

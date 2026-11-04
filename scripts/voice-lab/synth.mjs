@@ -4,6 +4,7 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { phonemize } from 'phonemizer';
+import { polishSpeech } from '../../src/core/audio/wav';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const ort = await import(join(root, 'node_modules/onnxruntime-web/dist/ort.wasm.bundle.min.mjs'));
@@ -24,6 +25,7 @@ const startS = (performance.now() - t) / 1000;
 const map = cfg.phoneme_id_map;
 const pad = map['_']?.[0] ?? 0;
 const pieces = [];
+const raws = [];
 let synthS = 0;
 for (const sentence of PASSAGE) {
   // Same as the app: punctuation kept, words phonemized with eSpeak.
@@ -41,14 +43,22 @@ for (const sentence of PASSAGE) {
     scales: new ort.Tensor('float32', Float32Array.from([inf.noise_scale ?? 0.667, inf.length_scale ?? 1, inf.noise_w ?? 0.8]), [3]),
   });
   synthS += (performance.now() - t) / 1000;
-  pieces.push(Float32Array.from(r[session.outputNames[0]].data), new Float32Array(Math.round(cfg.audio.sample_rate * 0.35)));
+  const raw = Float32Array.from(r[session.outputNames[0]].data);
+  raws.push(raw, new Float32Array(Math.round(cfg.audio.sample_rate * 0.35)));
+  // The app's processing of each sentence, with its normal pause between sentences.
+  pieces.push(polishSpeech(raw, cfg.audio.sample_rate), new Float32Array(Math.round(cfg.audio.sample_rate * 0.18)));
 }
-const n = pieces.reduce((s, p) => s + p.length, 0);
+function writeWav(file, chunks) {
+  const n = chunks.reduce((s, p) => s + p.length, 0);
+  const buf = Buffer.alloc(44 + n * 2);
+  buf.write('RIFF', 0); buf.writeUInt32LE(36 + n * 2, 4); buf.write('WAVEfmt ', 8); buf.writeUInt32LE(16, 16); buf.writeUInt16LE(1, 20); buf.writeUInt16LE(1, 22);
+  buf.writeUInt32LE(sr, 24); buf.writeUInt32LE(sr * 2, 28); buf.writeUInt16LE(2, 32); buf.writeUInt16LE(16, 34); buf.write('data', 36); buf.writeUInt32LE(n * 2, 40);
+  let o = 44;
+  for (const p of chunks) for (const x of p) { buf.writeInt16LE(Math.max(-32768, Math.min(32767, Math.round(x * 32767))), o); o += 2; }
+  writeFileSync(file, buf);
+  return n / sr;
+}
 const sr = cfg.audio.sample_rate;
-const buf = Buffer.alloc(44 + n * 2);
-buf.write('RIFF', 0); buf.writeUInt32LE(36 + n * 2, 4); buf.write('WAVEfmt ', 8); buf.writeUInt32LE(16, 16); buf.writeUInt16LE(1, 20); buf.writeUInt16LE(1, 22);
-buf.writeUInt32LE(sr, 24); buf.writeUInt32LE(sr * 2, 28); buf.writeUInt16LE(2, 32); buf.writeUInt16LE(16, 34); buf.write('data', 36); buf.writeUInt32LE(n * 2, 40);
-let o = 44;
-for (const p of pieces) for (const s of p) { buf.writeInt16LE(Math.max(-32768, Math.min(32767, Math.round(s * 32767))), o); o += 2; }
-writeFileSync(out, buf);
+const n = writeWav(out.replace(/\.wav$/, '.raw.wav'), raws) * sr;
+writeWav(out, pieces);
 console.log(JSON.stringify({ startS, synthS, audioS: n / sr, speed: n / sr / synthS }));
