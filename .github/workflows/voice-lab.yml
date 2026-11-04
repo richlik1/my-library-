@@ -37,7 +37,7 @@ jobs:
           mkdir -p scripts/voice-lab/samples
           cp scripts/voice-lab/out/results.json scripts/voice-lab/samples/
           for w in scripts/voice-lab/out/*.wav; do
-            case "$w" in *.raw.wav) continue;; esac
+            case "$w" in *.raw.wav|*.take*) continue;; esac
             ffmpeg -loglevel error -y -i "$w" -t 9 -ac 1 -c:a aac -b:a 40k "scripts/voice-lab/samples/$(basename "$w" .wav).m4a" || true
           done
           git config user.name "voice-lab"

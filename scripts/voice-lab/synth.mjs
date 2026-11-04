@@ -24,29 +24,36 @@ const session = await ort.InferenceSession.create(new Uint8Array(readFileSync(mo
 const startS = (performance.now() - t) / 1000;
 const map = cfg.phoneme_id_map;
 const pad = map['_']?.[0] ?? 0;
-const pieces = [];
-const raws = [];
+const sr = cfg.audio.sample_rate;
+const TAKES = Number(process.env.TAKES ?? 5);
 let synthS = 0;
-for (const sentence of PASSAGE) {
-  // Same as the app: punctuation kept, words phonemized with eSpeak.
-  const parts = sentence.split(/([,.;:!?]+\s*)/).filter(Boolean);
-  let ipa = '';
-  for (const p of parts) ipa += /^[,.;:!?]/.test(p) ? p : (await phonemize(p, cfg.espeak?.voice ?? 'en-us')).join(' ');
-  const ids = [...(map['^'] ?? [1]), pad];
-  for (const ch of ipa.normalize('NFD')) if (map[ch]) ids.push(...map[ch], pad);
-  ids.push(...(map['$'] ?? [2]));
-  const inf = cfg.inference ?? {};
-  t = performance.now();
-  const r = await session.run({
-    input: new ort.Tensor('int64', BigInt64Array.from(ids.map(BigInt)), [1, ids.length]),
-    input_lengths: new ort.Tensor('int64', BigInt64Array.from([BigInt(ids.length)]), [1]),
-    scales: new ort.Tensor('float32', Float32Array.from([inf.noise_scale ?? 0.667, inf.length_scale ?? 1, inf.noise_w ?? 0.8]), [3]),
-  });
-  synthS += (performance.now() - t) / 1000;
-  const raw = Float32Array.from(r[session.outputNames[0]].data);
-  raws.push(raw, new Float32Array(Math.round(cfg.audio.sample_rate * 0.35)));
-  // The app's processing of each sentence, with its normal pause between sentences.
-  pieces.push(polishSpeech(raw, cfg.audio.sample_rate), new Float32Array(Math.round(cfg.audio.sample_rate * 0.18)));
+let audioS = 0;
+const takes = [];
+for (let take = 0; take < TAKES; take++) {
+  const pieces = [];
+  const raws = [];
+  for (const sentence of PASSAGE) {
+    // Same as the app: punctuation kept, words phonemized with eSpeak.
+    const parts = sentence.split(/([,.;:!?]+\s*)/).filter(Boolean);
+    let ipa = '';
+    for (const p of parts) ipa += /^[,.;:!?]/.test(p) ? p : (await phonemize(p, cfg.espeak?.voice ?? 'en-us')).join(' ');
+    const ids = [...(map['^'] ?? [1]), pad];
+    for (const ch of ipa.normalize('NFD')) if (map[ch]) ids.push(...map[ch], pad);
+    ids.push(...(map['$'] ?? [2]));
+    const inf = cfg.inference ?? {};
+    t = performance.now();
+    const r = await session.run({
+      input: new ort.Tensor('int64', BigInt64Array.from(ids.map(BigInt)), [1, ids.length]),
+      input_lengths: new ort.Tensor('int64', BigInt64Array.from([BigInt(ids.length)]), [1]),
+      scales: new ort.Tensor('float32', Float32Array.from([inf.noise_scale ?? 0.667, inf.length_scale ?? 1, inf.noise_w ?? 0.8]), [3]),
+    });
+    synthS += (performance.now() - t) / 1000;
+    const raw = Float32Array.from(r[session.outputNames[0]].data);
+    raws.push(raw, new Float32Array(Math.round(sr * 0.35)));
+    // The app's processing of each sentence, with its normal pause between sentences.
+    pieces.push(polishSpeech(raw, sr), new Float32Array(Math.round(sr * 0.18)));
+  }
+  takes.push({ pieces, raws });
 }
 function writeWav(file, chunks) {
   const n = chunks.reduce((s, p) => s + p.length, 0);
@@ -58,7 +65,9 @@ function writeWav(file, chunks) {
   writeFileSync(file, buf);
   return n / sr;
 }
-const sr = cfg.audio.sample_rate;
-const n = writeWav(out.replace(/\.wav$/, '.raw.wav'), raws) * sr;
-writeWav(out, pieces);
-console.log(JSON.stringify({ startS, synthS, audioS: n / sr, speed: n / sr / synthS }));
+takes.forEach(({ pieces, raws }, i) => {
+  const suffix = i === 0 ? '' : `.take${i}`;
+  audioS += writeWav(out.replace(/\.wav$/, `${suffix}.raw.wav`), raws);
+  writeWav(out.replace(/\.wav$/, `${suffix}.wav`), pieces);
+});
+console.log(JSON.stringify({ startS, synthS, audioS, speed: audioS / synthS, takes: TAKES }));

@@ -8,7 +8,7 @@ python3 - > keys.txt <<'PY'
 import json
 v = json.load(open("voices.json"))
 for k, d in v.items():
-    if d["language"]["family"] == "en" and d["quality"] in ("medium", "high") and d["num_speakers"] == 1:
+    if d["language"]["family"] == "en" and d["quality"] == "medium" and d["num_speakers"] == 1:
         onnx = [f for f in d["files"] if f.endswith(".onnx")][0]
         print(k, onnx, round(d["files"][onnx]["size_bytes"] / 1e6))
 PY
