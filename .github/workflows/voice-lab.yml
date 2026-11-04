@@ -1,0 +1,36 @@
+# Voice lab: makes the same passage with every English Piper voice the way the app does, scores each with
+# UTMOS (a model that predicts how natural listeners rate speech, 1-5), and measures speed and size.
+# Used to choose the voices the app offers. Runs on demand (or on pushes to the voice-lab branch).
+name: Voice lab
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [voice-lab]
+
+permissions:
+  contents: read
+
+jobs:
+  lab:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: npm ci
+      - run: npm i -g bun@1.2.20
+      - run: pip install -q torch torchaudio --index-url https://download.pytorch.org/whl/cpu
+      - name: Make and score every voice
+        working-directory: scripts/voice-lab
+        run: ./run.sh out
+      - uses: actions/upload-artifact@v4
+        with:
+          name: voice-lab
+          path: scripts/voice-lab/out
