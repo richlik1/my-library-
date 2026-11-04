@@ -89,6 +89,21 @@ export function NarrationPanel({
 
   const playPreview = async (id: string) => {
     const name = voiceList.find((v) => v.id === id)?.name ?? id;
+    // Fast natural voices have a short recorded sample: it plays at once, without downloading the voice.
+    if (mode === 'piper') {
+      previewAudio.current?.pause();
+      const a = new Audio(new URL(`voice-samples/${id}.m4a`, document.baseURI).href);
+      previewAudio.current = a;
+      setPreview({ voice: id, label: 'Playing a sample…' });
+      a.onended = () => setPreview(null);
+      try {
+        await a.play();
+        return;
+      } catch {
+        setPreview(null);
+        /* no sample: make one on the device below */
+      }
+    }
     setPreview({ voice: id, label: 'Preparing…' });
     try {
       const engine = neuralEngine(mode === 'piper' ? 'piper' : 'kokoro');
@@ -322,11 +337,12 @@ export function NarrationPanel({
                     <button className="grow" style={{ textAlign: 'left' }} onClick={() => setNarration({ voice: v.id })}>
                       <div>
                         {v.name}
-                        {v.grade?.startsWith('A') && <span className="tag">Best</span>}
+                        {(v.grade?.startsWith('A') || ('score' in v && (v.score as number) >= 4.4)) && <span className="tag">Most natural</span>}
                       </div>
                       <div className="sub">
                         {v.gender === 'female' ? 'Female' : 'Male'} · {v.accent}
                         {v.grade ? ` · grade ${v.grade}` : ''}
+                        {'score' in v ? ` · rated ${(v.score as number).toFixed(1)}/5` : ''}
                       </div>
                     </button>
                     <button className="icon-btn" onClick={() => playPreview(v.id)} aria-label={`Preview ${v.name}`} disabled={!!preview}>
@@ -402,7 +418,7 @@ function PresetPicker({ book, onBookChange }: { book: Book; onBookChange(b: Book
           <button key={p.id} className="preset" aria-pressed={active?.id === p.id} onClick={() => pick(p.id)}>
             <strong>{p.name}</strong>
             <small>
-              {p.engine !== 'device' ? voiceName(p.voice) : 'Device voice'} · {p.rate}× · {p.pause} pauses
+              {p.engine === 'device' ? 'Device voice' : p.voice ? voiceName(p.voice) : 'Your voice'} · {p.rate}× · {p.pause} pauses
             </small>
           </button>
         ))}

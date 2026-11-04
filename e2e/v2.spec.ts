@@ -56,7 +56,16 @@ test('narrator presets switch in one tap and are remembered for the book after a
   await expect(page.getByRole('button', { name: /^Business Learning/ })).toHaveAttribute('aria-pressed', 'true');
   await expect(page.getByRole('radio', { name: 'Fast natural' })).toHaveAttribute('aria-checked', 'true');
   await page.getByRole('button', { name: 'Close', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Voice and speed' })).toContainText('1.25× · Ryan');
+  // Presets set speed and pauses and keep the voice (no extra voice download).
+  await expect(page.getByRole('button', { name: 'Voice and speed' })).toContainText('1.25× · Amy');
+  await page.getByRole('button', { name: 'Voice and speed' }).click();
+  await page.getByRole('button', { name: /^Bryce/ }).click();
+  await page.getByRole('button', { name: /^Relaxed Listening/ }).click();
+  await page.getByRole('button', { name: 'Close', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Voice and speed' })).toContainText('0.9× · Bryce');
+  await page.getByRole('button', { name: 'Voice and speed' }).click();
+  await page.getByRole('button', { name: /^Business Learning/ }).click();
+  await page.getByRole('button', { name: 'Close', exact: true }).click();
 
   // Another speed for the app in general, then restart and reopen the book.
   await page.reload();

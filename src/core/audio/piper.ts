@@ -6,18 +6,28 @@
 import type { NeuralVoice } from './types';
 
 export interface PiperVoice extends NeuralVoice {
+  /** Measured naturalness, 1–5 (see PIPER_VOICES). */
+  score: number;
   /** Path under rhasspy/piper-voices, e.g. en/en_US/lessac/medium/en_US-lessac-medium */
   path: string;
 }
 
+/**
+ * The voices offered, most natural first. `score` is the predicted listener rating (UTMOS, 1–5) of the same
+ * passage made the app's way, measured by scripts/voice-lab (all 24 English Piper voices were tested; the
+ * "high" variants were 8× slower without sounding better, so only "medium" voices are offered).
+ */
 export const PIPER_VOICES: PiperVoice[] = [
-  { id: 'en_US-lessac-medium', name: 'Lessac', gender: 'female', accent: 'American', path: 'en/en_US/lessac/medium/en_US-lessac-medium' },
-  { id: 'en_US-ryan-medium', name: 'Ryan', gender: 'male', accent: 'American', path: 'en/en_US/ryan/medium/en_US-ryan-medium' },
-  { id: 'en_US-amy-medium', name: 'Amy', gender: 'female', accent: 'American', path: 'en/en_US/amy/medium/en_US-amy-medium' },
-  { id: 'en_GB-alan-medium', name: 'Alan', gender: 'male', accent: 'British', path: 'en/en_GB/alan/medium/en_GB-alan-medium' },
+  { id: 'en_US-amy-medium', name: 'Amy', gender: 'female', accent: 'American', score: 4.5, path: 'en/en_US/amy/medium/en_US-amy-medium' },
+  { id: 'en_US-hfc_male-medium', name: 'Cal', gender: 'male', accent: 'American', score: 4.48, path: 'en/en_US/hfc_male/medium/en_US-hfc_male-medium' },
+  { id: 'en_US-bryce-medium', name: 'Bryce', gender: 'male', accent: 'American', score: 4.43, path: 'en/en_US/bryce/medium/en_US-bryce-medium' },
+  { id: 'en_GB-jenny_dioco-medium', name: 'Jenny', gender: 'female', accent: 'British', score: 4.42, path: 'en/en_GB/jenny_dioco/medium/en_GB-jenny_dioco-medium' },
+  { id: 'en_US-mike-medium', name: 'Mike', gender: 'male', accent: 'American', score: 4.35, path: 'en/en_US/mike/medium/en_US-mike-medium' },
+  { id: 'en_US-lessac-medium', name: 'Lessac', gender: 'female', accent: 'American', score: 4.06, path: 'en/en_US/lessac/medium/en_US-lessac-medium' },
+  { id: 'en_US-ryan-medium', name: 'Ryan', gender: 'male', accent: 'American', score: 4.03, path: 'en/en_US/ryan/medium/en_US-ryan-medium' },
 ];
 
-export const DEFAULT_PIPER_VOICE = 'en_US-lessac-medium';
+export const DEFAULT_PIPER_VOICE = 'en_US-amy-medium';
 export const PIPER_HOST = 'https://huggingface.co/rhasspy/piper-voices/resolve/main/';
 
 export interface PiperConfig {
