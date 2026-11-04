@@ -137,3 +137,32 @@ test('with the multi-core headers on, the app, PDF import and offline mode still
   await expect(page.getByRole('button', { name: 'Open The Lighthouse Keeper' })).toBeVisible();
   await context.setOffline(false);
 });
+
+test('the Lock Screen shows the book with cover artwork, even for a book without a cover image', async ({ page }) => {
+  await addBook(page, 'Night Harbour');
+  await page.getByRole('button', { name: 'Open Night Harbour' }).click();
+  await page.getByTestId('play').click();
+  await expect
+    .poll(() => page.evaluate(() => navigator.mediaSession?.metadata?.title))
+    .toBe('Night Harbour');
+  const art = await page.evaluate(() => navigator.mediaSession.metadata?.artwork?.[0]);
+  expect(art?.src.startsWith('data:image/png')).toBe(true);
+  expect(art?.sizes).toBe('512x512');
+});
+
+test('cover view: big cover, the sentence being heard and time left; remembered after a restart', async ({ page }) => {
+  await addBook(page, 'Night Harbour');
+  await page.getByRole('button', { name: 'Open Night Harbour' }).click();
+  await page.getByRole('button', { name: 'Show cover' }).click();
+  await expect(page.locator('.cover-view')).toContainText('Chapter 1 of 2');
+  await expect(page.locator('.cover-view')).toContainText('left');
+  await page.getByTestId('play').click();
+  await expect(page.locator('.cover-view-now')).toHaveText('Chapter 1');
+  await finish(page);
+  await expect(page.locator('.cover-view-now')).toContainText('The first chapter opens here.');
+  await page.getByRole('button', { name: 'Pause' }).click();
+  await page.reload();
+  await expect(page.locator('.cover-view')).toBeVisible();
+  await page.getByRole('button', { name: 'Show text' }).click();
+  await expect(page.locator('.reader')).toContainText('The first chapter opens here.');
+});
