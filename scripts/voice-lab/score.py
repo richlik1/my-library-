@@ -1,13 +1,22 @@
 """Scores each WAV with UTMOS (predicted listener rating of naturalness, 1-5) and prints a ranked table."""
 import json, sys, glob, os
+import wave
+import numpy as np
 import torch, torchaudio
+
+
+def load(path):
+    with wave.open(path) as w:
+        x = np.frombuffer(w.readframes(w.getnframes()), dtype=np.int16).astype(np.float32) / 32768
+        return torch.from_numpy(x).unsqueeze(0), w.getframerate()
+
 
 predictor = torch.hub.load("tarepan/SpeechMOS:v1.2.0", "utmos22_strong", trust_repo=True, verbose=False)
 rows = []
 for meta_path in sorted(glob.glob(os.path.join(sys.argv[1], "*.json"))):
     meta = json.load(open(meta_path))
     for kind, suffix in (("utmos", ".wav"), ("raw", ".raw.wav")):
-        wav, sr = torchaudio.load(meta_path[:-5] + suffix)
+        wav, sr = load(meta_path[:-5] + suffix)
         wav = torchaudio.functional.resample(wav, sr, 16000)
         with torch.no_grad():
             meta[kind] = round(float(predictor(wav, 16000)[0]), 3)
