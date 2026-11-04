@@ -10,7 +10,7 @@ import { serveDir } from './model-server.mjs';
  * The voice is served at ~4 MB/s (a good phone connection), so the first download takes ~15 s.
  */
 const DIR = process.env.PIPER_MODEL_DIR;
-test.skip(!DIR || !existsSync(join(DIR, 'en/en_US/lessac/medium/en_US-lessac-medium.onnx')), 'PIPER_MODEL_DIR not set');
+test.skip(!DIR || !existsSync(join(DIR, 'en/en_US/amy/medium/en_US-amy-medium.onnx')), 'PIPER_MODEL_DIR not set');
 
 const para = 'The lighthouse stood at the edge of the world. Every night its keeper climbed the long stairs to light the lamp.';
 const bookText = (n: number) => `Chapter 1\n\n${Array(6).fill(`${para} Book ${n}.`).join('\n\n')}\n\nChapter 2\n\n${Array(6).fill(para).join('\n\n')}`;
@@ -50,7 +50,7 @@ test('real Piper start-up: first use offers the device voice while downloading; 
   await page.reload();
   await page.waitForTimeout(3000); // the time it takes to pick a book
   await addBook(page, 2);
-  await expect(page.getByRole('button', { name: 'Voice and speed' })).toContainText('Lessac');
+  await expect(page.getByRole('button', { name: 'Voice and speed' })).toContainText('Amy');
   t0 = Date.now();
   await page.getByTestId('play').click();
   await expect.poll(() => time(page), { timeout: 60_000 }).not.toBe('0:00');
@@ -79,7 +79,7 @@ test('real Piper start-up: switching to the device voice during the download, th
   await expect.poll(() => page.evaluate(() => (window as unknown as { __spoken: string[] }).__spoken.length), { timeout: 10_000 }).toBeGreaterThan(0);
   // When the download finishes, the natural voice is offered back.
   await page.getByRole('button', { name: 'Switch' }).click({ timeout: 3 * 60_000 });
-  await expect(page.getByRole('button', { name: 'Voice and speed' })).toContainText('Lessac');
+  await expect(page.getByRole('button', { name: 'Voice and speed' })).toContainText('Amy');
 });
 
 test('real Piper: the Home card downloads the voice ahead of time, then books use it and start quickly', async ({ page }) => {
@@ -99,7 +99,7 @@ test('real Piper: the Home card downloads the voice ahead of time, then books us
   await expect(page.getByRole('region', { name: 'Natural voice ready' })).toBeVisible({ timeout: 3 * 60_000 });
   // A new book now reads with the natural voice, without choosing it, and starts quickly.
   await addBook(page, 4);
-  await expect(page.getByRole('button', { name: 'Voice and speed' })).toContainText('Lessac');
+  await expect(page.getByRole('button', { name: 'Voice and speed' })).toContainText('Amy');
   const t0 = Date.now();
   await page.getByTestId('play').click();
   await expect.poll(() => time(page), { timeout: 60_000 }).not.toBe('0:00');

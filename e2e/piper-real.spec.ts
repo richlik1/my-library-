@@ -7,14 +7,14 @@ import { serveDir } from './model-server.mjs';
 
 /**
  * Runs the REAL Piper voice in the browser. Opt-in: needs the voice files on disk, laid out like
- * huggingface.co/rhasspy/piper-voices (e.g. en/en_US/lessac/medium/en_US-lessac-medium.onnx and .onnx.json):
+ * huggingface.co/rhasspy/piper-voices (e.g. en/en_US/amy/medium/en_US-amy-medium.onnx and .onnx.json):
  *
  *   PIPER_MODEL_DIR=/path/to/piper-voices npx playwright test e2e/piper-real.spec.ts --project=desktop
  *
  * Runs in CI by .github/workflows/voice-tests.yml (which downloads the voice).
  */
 const DIR = process.env.PIPER_MODEL_DIR;
-test.skip(!DIR || !existsSync(join(DIR, 'en/en_US/lessac/medium/en_US-lessac-medium.onnx')), 'PIPER_MODEL_DIR not set');
+test.skip(!DIR || !existsSync(join(DIR, 'en/en_US/amy/medium/en_US-amy-medium.onnx')), 'PIPER_MODEL_DIR not set');
 
 test.beforeEach(async ({ page }) => {
   const server = await serveDir(DIR!, 4198);

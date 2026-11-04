@@ -6,6 +6,7 @@ import { addListening, awardXp, getAudioWav, getChapterAudio, saveProgress, upda
 import { ListeningTracker, XP_RULES, xpIds } from '../../core/habits';
 import { habitsChanged } from './useHabits';
 import { audioQueue } from '../narration';
+import { generatedCoverImage } from '../components/Cover';
 import { vlog } from '../../core/audio/voiceLog';
 import type { Book, Chapter, NarrationEngine, Position } from '../../core/types';
 import { isSequenceEngine } from '../../core/speech/engine';
@@ -19,6 +20,13 @@ type WakeLockSentinelLike = { release(): Promise<void>; released?: boolean };
  * Connects a Narrator to React: progress saving, settings, wake lock,
  * Media Session metadata and foreground/background handling.
  */
+// Generated Lock Screen artwork, made once per book.
+const artwork = new Map<string, string | null>();
+function artworkFor(book: Book): string | null {
+  if (!artwork.has(book.id)) artwork.set(book.id, generatedCoverImage(book));
+  return artwork.get(book.id) ?? null;
+}
+
 export function usePlayback(book: Book, chapters: Chapter[], start: Position, voiceId: string | null, mode: NarrationEngine = 'device') {
   const { settings } = useSettings();
   const [narrator, setNarrator] = useState<PlaybackController | null>(null);
@@ -191,7 +199,11 @@ export function usePlayback(book: Book, chapters: Chapter[], start: Position, vo
         title: book.title,
         artist: book.author || 'My Library',
         album: chapters[state?.chapter ?? 0]?.title ?? '',
-        artwork: book.cover ? [{ src: book.cover, sizes: '400x600', type: book.cover.slice(5, book.cover.indexOf(';')) }] : [],
+        artwork: book.cover
+          ? [{ src: book.cover, sizes: '400x600', type: book.cover.slice(5, book.cover.indexOf(';')) }]
+          : artworkFor(book)
+            ? [{ src: artworkFor(book)!, sizes: '512x512', type: 'image/png' }]
+            : [],
       });
       const handlers: Array<[MediaSessionAction, () => void]> = [
         ['play', () => narrator.play()],

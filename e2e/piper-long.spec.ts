@@ -10,7 +10,7 @@ import { serveDir } from './model-server.mjs';
  * parts of a chapter and into the next chapter, and the place must be saved. Opt-in like piper-real.spec.ts.
  */
 const DIR = process.env.PIPER_MODEL_DIR;
-test.skip(!DIR || !existsSync(join(DIR, 'en/en_US/lessac/medium/en_US-lessac-medium.onnx')), 'PIPER_MODEL_DIR not set');
+test.skip(!DIR || !existsSync(join(DIR, 'en/en_US/amy/medium/en_US-amy-medium.onnx')), 'PIPER_MODEL_DIR not set');
 
 const sentences = [
   'The lighthouse stood at the edge of the world.',

@@ -67,6 +67,19 @@ export function UpdatePrompt() {
     <Sheet title={`What’s new in My Library ${__APP_VERSION__}`} onClose={() => setWhatsNew(false)}>
       <ul className="whats-new">
         <li>
+          <strong>Better voices:</strong> we tested all 20 English fast natural voices with a listener-rating model and now offer the most
+          natural ones. <strong>Amy</strong> is the new default (rated 4.5 out of 5, the old default 4.2). In Voice &amp; speed, tap ▶ to hear any
+          voice instantly, before downloading it. Presets now keep your voice, so they never download another one.
+        </li>
+        <li>
+          <strong>Smoother audio:</strong> every sentence plays at the same volume, with no clicks between sentences and no clipped first
+          sounds.
+        </li>
+        <li>
+          <strong>Cover view:</strong> tap the picture icon in the player for a big cover, the sentence being read and the time left in the
+          book. Books without a cover now show one on the Lock Screen too.
+        </li>
+        <li>
           <strong>The natural voice starts fast:</strong> Home offers a one-time download (63 MB), then every book reads with it and Play starts
           in about 2 seconds. While it downloads, you can listen with the device voice and switch back when it’s ready.
         </li>

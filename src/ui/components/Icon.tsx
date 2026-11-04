@@ -26,6 +26,7 @@ const paths: Record<string, string> = {
   chevronRight: 'M9 5l7 7-7 7',
   more: 'M5 12h.01M12 12h.01M19 12h.01',
   book: 'M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2zM4 21a2 2 0 0 1 2-2h13v2z',
+  image: 'M4 5h16v14H4zM4 16l5-5 4 4 2-2 5 5M15 9.5a1.5 1.5 0 1 0 0-.01',
   info: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 11v5M12 7.5h.01',
   share: 'M12 3v12M7.5 7.5 12 3l4.5 4.5M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6',
   text: 'M4 7V5h16v2M9 19h6M12 5v14',

@@ -106,7 +106,7 @@ export interface NarratorPreset {
   id: string;
   name: string;
   engine: NarrationEngine;
-  /** Natural voice id (Kokoro), when engine is 'kokoro'. */
+  /** Natural voice id; none = keep the book's current voice. */
   voice?: string;
   rate: number;
   pause: PauseLength;

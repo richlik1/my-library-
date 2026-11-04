@@ -5,7 +5,7 @@ import { AudioQueue } from '../src/core/audio/queue';
 import { chunkIndexAtTime, offsetAtTime, textHash, timeAtOffset } from '../src/core/audio/timing';
 import type { ChapterAudio, NeuralEngine } from '../src/core/audio/types';
 import { chapterAudioStatus, partKey, partRanges } from '../src/core/audio/types';
-import { concatWavs, decodeWavInfo, encodeWav, trimSilence } from '../src/core/audio/wav';
+import { concatWavs, decodeWavInfo, encodeWav, polishSpeech, trimSilence } from '../src/core/audio/wav';
 import { db, deleteAudio, deleteBook, getAudioWav, getChapterAudio, getChapterWav, listBookAudio, putAudio, resetDbConnection, saveImportedBook } from '../src/core/storage/db';
 import { chunkText } from '../src/core/speech/chunker';
 
@@ -59,6 +59,48 @@ describe('wav encoding', () => {
   });
 });
 
+describe('speech polishing', () => {
+  const sr = 16000;
+  /** Silence, a quiet onset (like "h"), a louder vowel, silence. */
+  const sentence = (vowel: number) => {
+    const x = new Float32Array(sr); // 1 s
+    for (let i = 4000; i < 4800; i++) x[i] = 0.02 * Math.sin(i * 1.3); // 50 ms quiet "h"
+    for (let i = 4800; i < 10000; i++) x[i] = vowel * Math.sin(i * 0.2);
+    return x;
+  };
+  const rms = (x: Float32Array) => Math.sqrt(x.reduce((s, v) => s + v * v, 0) / x.length);
+
+  it('keeps quiet sounds at the start and trims the silence around the speech', () => {
+    const out = polishSpeech(sentence(0.3), sr);
+    // 800 + 5200 samples of sound, plus at most 30 ms before and 60 ms after.
+    expect(out.length).toBeGreaterThanOrEqual(6000);
+    expect(out.length).toBeLessThanOrEqual(6000 + 0.1 * sr);
+    const onset = out.findIndex((v) => Math.abs(v) > 0.005);
+    expect(onset).toBeLessThan(0.035 * sr);
+  });
+
+  it('evens out loudness between quiet and loud sentences, never clipping', () => {
+    const quiet = polishSpeech(sentence(0.05), sr);
+    const loud = polishSpeech(sentence(0.6), sr);
+    expect(rms(quiet) / rms(loud)).toBeGreaterThan(0.8);
+    expect(rms(quiet) / rms(loud)).toBeLessThan(1.25);
+    for (const x of [...quiet, ...loud]) expect(Math.abs(x)).toBeLessThanOrEqual(0.95);
+  });
+
+  it('fades in and out (no clicks) and removes DC offset', () => {
+    const x = sentence(0.4).map((v) => v + 0.05);
+    const out = polishSpeech(x, sr);
+    expect(Math.abs(out[0])).toBeLessThan(1e-3);
+    expect(Math.abs(out[out.length - 1])).toBeLessThan(1e-3);
+    const mean = out.reduce((s, v) => s + v, 0) / out.length;
+    expect(Math.abs(mean)).toBeLessThan(0.01);
+  });
+
+  it('returns nothing for silence', () => {
+    expect(polishSpeech(new Float32Array(sr), sr).length).toBe(0);
+  });
+});
+
 describe('chapter generation', () => {
   it('builds one audio file with sentence timings and pauses', async () => {
     const engine = new FakeEngine();
@@ -66,9 +108,10 @@ describe('chapter generation', () => {
     const chunks = chunkText(TEXT);
     expect(r.timings).toHaveLength(chunks.length);
     expect(r.timings.map((t) => [t.start, t.end])).toEqual(chunks.map((c) => [c.start, c.end]));
-    // Each chunk lasts 0.01 s per character (padding trimmed); pauses sit between chunks.
+    // Each chunk lasts 0.01 s per character plus a short margin kept around speech (≤ 0.1 s); pauses sit between chunks.
     expect(r.timings[0].t0).toBe(0);
-    expect(r.timings[0].t1).toBeCloseTo(chunks[0].text.length * 0.01, 5);
+    expect(r.timings[0].t1).toBeGreaterThanOrEqual(chunks[0].text.length * 0.01);
+    expect(r.timings[0].t1).toBeLessThanOrEqual(chunks[0].text.length * 0.01 + 0.1);
     expect(r.timings[1].t0).toBeCloseTo(r.timings[0].t1 + 0.2, 5);
     expect(r.timings[2].t0).toBeCloseTo(r.timings[1].t1 + 0.5, 5);
     expect(decodeWavInfo(r.wav).duration).toBeCloseTo(r.duration, 2);

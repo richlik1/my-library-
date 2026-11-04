@@ -44,12 +44,12 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npx playwright install webkit
-      - name: Download voices (Piper Lessac, Kokoro q8 for the Chromium-only Kokoro tests)
+      - name: Download voices (Piper Amy, Kokoro q8 for the Chromium-only Kokoro tests)
         run: |
-          d=voices/piper/en/en_US/lessac/medium
+          d=voices/piper/en/en_US/amy/medium
           mkdir -p $d voices/kokoro/onnx
-          curl -sSfL -o $d/en_US-lessac-medium.onnx https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/lessac/medium/en_US-lessac-medium.onnx
-          curl -sSfL -o $d/en_US-lessac-medium.onnx.json https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/lessac/medium/en_US-lessac-medium.onnx.json
+          curl -sSfL -o $d/en_US-amy-medium.onnx https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/amy/medium/en_US-amy-medium.onnx
+          curl -sSfL -o $d/en_US-amy-medium.onnx.json https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/amy/medium/en_US-amy-medium.onnx.json
           for f in config.json tokenizer.json tokenizer_config.json onnx/model_quantized.onnx; do
             curl -sSfL -o voices/kokoro/$f https://huggingface.co/onnx-community/Kokoro-82M-v1.0-ONNX/resolve/main/$f
           done

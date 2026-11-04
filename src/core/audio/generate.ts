@@ -1,6 +1,6 @@
 import { chunkText, type Chunk } from '../speech/chunker';
 import type { ChunkTiming, NeuralEngine } from './types';
-import { encodeWav, trimSilence } from './wav';
+import { encodeWav, polishSpeech } from './wav';
 
 export class ChunkGenerationError extends Error {
   constructor(
@@ -84,7 +84,8 @@ export async function generatePart(engine: NeuralEngine, chunks: Chunk[], [from,
     }
     if (!result) throw new ChunkGenerationError(i, c.text, lastError);
     sampleRate = result.sampleRate;
-    const samples = trimSilence(result.samples);
+    // Silent results (e.g. a line that is only a dash) just add nothing.
+    const samples = polishSpeech(result.samples, result.sampleRate);
     const dur = samples.length / sampleRate;
     timings.push({ start: c.start, end: c.end, t0: t, t1: t + dur });
     parts.push(samples);

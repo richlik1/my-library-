@@ -11,12 +11,14 @@ import { useSettings } from '../hooks/settings';
 import { useToast } from '../hooks/toast';
 import { usePlaybackSession } from '../hooks/playbackSession';
 import { goBack, navigate } from '../hooks/useRoute';
-import { BookDetailsSheet } from './BookDetailsSheet';
+import { BookDetailsSheet, listeningHours } from './BookDetailsSheet';
 import { NarrationPanel, useAudioJobs, useReadyChapters } from './NarrationPanel';
 import { KOKORO_VOICES } from '../../core/audio/kokoroEngine';
 import { PIPER_VOICES } from '../../core/audio/piper';
 import { naturalVoiceFor, piperEngine } from '../narration';
 import { Icon } from './Icon';
+import { Cover } from './Cover';
+import { bookPercent } from '../../core/speech/narrator';
 import { AnnotationsSheet, COLORS, ChaptersSheet, EditChapterSheet, NoteSheet, SleepSheet, VoiceSheet, swatch } from './PlayerSheets';
 import { Reader, type TextRange } from './Reader';
 import { AskSheet, type AskMode } from './AskSheet';
@@ -88,6 +90,23 @@ function PlayerView({ autoplay, at }: { autoplay: boolean; at?: { chapter: numbe
   const [ask, setAsk] = useState<AskMode | null>(null);
   const [noteDraft, setNoteDraft] = useState<{ range: TextRange; chapter: number; existing?: Annotation } | null>(null);
   const [dismissedNotice, setDismissedNotice] = useState<string | null>(null);
+  // 'cover': big cover and the sentence being heard, for just listening; 'text': read along.
+  const [view, setView] = useState<'text' | 'cover'>(() => {
+    try {
+      return localStorage.getItem('ml-player-view') === 'cover' ? 'cover' : 'text';
+    } catch {
+      return 'text';
+    }
+  });
+  const switchView = () => {
+    const next = view === 'text' ? 'cover' : 'text';
+    setView(next);
+    try {
+      localStorage.setItem('ml-player-view', next);
+    } catch {
+      /* private mode */
+    }
+  };
   const [lockTip, setLockTip] = useState(() => {
     try {
       return isIOS() && !isNativeApp() && localStorage.getItem('ml-lock-tip-2') !== '1';
@@ -141,6 +160,7 @@ function PlayerView({ autoplay, at }: { autoplay: boolean; at?: { chapter: numbe
   const elapsed = state.offset / cps;
   const total = chapterLen / cps;
   const currentChunk = chunks[state.chunkIndex];
+  const bookChars = chapters.reduce((n, c) => n + c.text.length, 0);
   const bookmarkHere = annotations.find(
     (a) => a.kind === 'bookmark' && a.chapter === state.chapter && currentChunk && a.start >= currentChunk.start && a.start < currentChunk.end,
   );
@@ -212,6 +232,9 @@ function PlayerView({ autoplay, at }: { autoplay: boolean; at?: { chapter: numbe
             {chapter?.title} · {state.chapter + 1}/{chapters.length}
           </div>
         </button>
+        <button className="icon-btn" onClick={switchView} aria-label={view === 'text' ? 'Show cover' : 'Show text'}>
+          <Icon name={view === 'text' ? 'image' : 'book'} />
+        </button>
         <button className="icon-btn" onClick={() => setAsk('ask')} aria-label="Ask My Book">
           <Icon name="search" />
         </button>
@@ -220,7 +243,25 @@ function PlayerView({ autoplay, at }: { autoplay: boolean; at?: { chapter: numbe
         </button>
       </header>
 
-      {chapter && (
+      {chapter && view === 'cover' && (
+        <div className="cover-view">
+          <div className="cover-view-art">
+            <Cover book={book} size={1.6} />
+          </div>
+          <div className="cover-view-meta">
+            <div className="small muted">
+              Chapter {state.chapter + 1} of {chapters.length} · {listeningHours(Math.max(0, bookChars * (1 - bookPercent(chapters, state))), settings.rate)} left
+            </div>
+            <div className="bar" style={{ margin: '8px auto 0', maxWidth: 260 }}>
+              <i style={{ width: `${Math.round(bookPercent(chapters, state) * 100)}%` }} />
+            </div>
+          </div>
+          <p className="cover-view-now" aria-live="polite" onClick={switchView}>
+            {currentChunk?.text ?? ''}
+          </p>
+        </div>
+      )}
+      {chapter && view === 'text' && (
         <Reader
           chapter={chapter}
           chapterIndex={state.chapter}

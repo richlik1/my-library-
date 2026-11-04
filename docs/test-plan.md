@@ -102,3 +102,26 @@ Downloads served at ~4 MB/s to imitate a phone connection.
 | Toasts never cover the top buttons | Passed | — |
 
 Measured times include up to ~1 s of test polling (the clock must reach 0:01). Not measured on an iPhone.
+
+## 2.5.0 — Voices chosen by measurement
+
+`scripts/voice-lab` (run by `.github/workflows/voice-lab.yml`): the same 3-sentence passage made with each of the 20 English
+single-speaker “medium” Piper voices, exactly the app’s way (phonemizer + ONNX Runtime web, one thread), 5 takes each, scored with
+UTMOS (`utmos22_strong`, predicted listener rating 1–5). Piper output varies take to take (single-take scores moved up to ±0.4), so
+only averages are used.
+
+| Voice | UTMOS (mean of 5) | ± | Offered |
+|---|---|---|---|
+| Amy (US, f) | 4.48 | 0.02 | default |
+| Bryce (US, m) | 4.42 | 0.01 | yes |
+| Kristin (US, f) | 4.38 | 0.10 | yes |
+| Mike (US, m) | 4.34 | 0.06 | yes |
+| Jenny (UK, f) | 4.30 | 0.13 | yes |
+| Ryan (US, m) | 4.29 | 0.12 | yes |
+| Lessac (US, f) — previous default | 4.19 | 0.17 | kept for existing books |
+| Alan (UK, m) — previously offered | 3.93 | 0.09 | removed |
+
+“High” voices (lessac, ryan, ljspeech, cori) were measured in an earlier run at 0.6–0.7× real time (vs ~5× for medium) without
+higher scores, so none are offered. Speech polish (gentle trim, fades, even loudness): UTMOS 4.106 vs 4.124 unpolished — no
+measurable effect on naturalness; it is kept for even volume and click-free joins, which UTMOS does not measure.
+Not listened to by a person; not measured on an iPhone.
