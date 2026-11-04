@@ -43,7 +43,7 @@ jobs:
           git config user.name "voice-lab"
           git config user.email "voice-lab@users.noreply.github.com"
           git add scripts/voice-lab/samples
-          git commit -m "Voice lab results and samples [skip ci]" && git push || true
+          git commit -m "Voice lab results and samples [skip ci]" && git pull --rebase origin voice-lab && git push origin HEAD:voice-lab || true
       - uses: actions/upload-artifact@v4
         with:
           name: voice-lab
