@@ -25,7 +25,7 @@ jobs:
         with:
           python-version: '3.11'
       - run: npm ci
-      - run: npm i -g bun@1.2.20
+      - run: npm i -g bun@1.4.4
       - run: pip install -q torch torchaudio --index-url https://download.pytorch.org/whl/cpu
       - name: Make and score every voice
         working-directory: scripts/voice-lab
