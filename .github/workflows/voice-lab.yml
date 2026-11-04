@@ -33,11 +33,11 @@ jobs:
       - name: Save results and short samples (Opus, mono) to the voice-lab branch
         if: github.ref == 'refs/heads/voice-lab'
         run: |
+          sudo apt-get install -y -qq ffmpeg >/dev/null
           mkdir -p scripts/voice-lab/samples
           cp scripts/voice-lab/out/results.json scripts/voice-lab/samples/
           for w in scripts/voice-lab/out/*.wav; do
             case "$w" in *.raw.wav) continue;; esac
-            ffmpeg -loglevel error -y -i "$w" -t 9 -ac 1 -c:a libopus -b:a 24k "scripts/voice-lab/samples/$(basename "$w" .wav).ogg" || true
             ffmpeg -loglevel error -y -i "$w" -t 9 -ac 1 -c:a aac -b:a 40k "scripts/voice-lab/samples/$(basename "$w" .wav).m4a" || true
           done
           git config user.name "voice-lab"
