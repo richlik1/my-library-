@@ -173,3 +173,16 @@ test('natural voice: when the voice is slower than listening, playback waits on 
   await page.getByText('Listening log (if audio stopped by itself)').click();
   await expect(page.locator('.listening-log')).toContainText('player: audio ready after');
 });
+
+test('fast natural voices: the preview plays a recorded sample at once (no voice download)', async ({ page }) => {
+  await page.goto('./');
+  await page.getByTestId('file-input').setInputFiles({ name: 'samples.txt', mimeType: 'text/plain', buffer: Buffer.from('Chapter 1\n\nA short book.') });
+  await page.getByRole('button', { name: 'Save to library' }).click();
+  await page.getByRole('button', { name: 'Open samples' }).click();
+  await page.getByRole('button', { name: 'Voice and speed' }).click();
+  await page.getByRole('radio', { name: 'Fast natural' }).click();
+  await expect(page.getByRole('button', { name: /^Amy/ })).toContainText('Most natural');
+  const sample = page.waitForResponse((r) => r.url().endsWith('/voice-samples/en_US-amy-medium.m4a'));
+  await page.getByRole('button', { name: 'Preview Amy' }).click();
+  expect([200, 206]).toContain((await sample).status());
+});
