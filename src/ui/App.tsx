@@ -39,7 +39,9 @@ function ThemeSync() {
 export function App() {
   const route = useRoute();
   const routeKey = JSON.stringify(route);
-  useEffect(() => window.scrollTo(0, 0), [routeKey]);
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [routeKey]);
   // Get the fast natural voice ready in the background, so Play starts quickly.
   useEffect(() => {
     const t = setTimeout(warmUpFastVoice, 800);

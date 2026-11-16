@@ -145,11 +145,17 @@ function SessionHost({
   const mode = session.book.narration?.engine ?? 'device';
   const { narrator, state } = usePlayback(session.book, session.chapters, session.start, voiceId, mode);
   const { settings } = useSettings();
-  useEffect(() => onLive({ narrator, state }), [narrator, state, onLive]);
+  useEffect(() => {
+    onLive({ narrator, state });
+  }, [narrator, state, onLive]);
   // Background sound follows narration: on while it plays, faded out when it pauses or the book closes.
-  useEffect(() => ambient.set(settings.ambient, settings.ambientVolume), [settings.ambient, settings.ambientVolume]);
+  useEffect(() => {
+    ambient.set(settings.ambient, settings.ambientVolume);
+  }, [settings.ambient, settings.ambientVolume]);
   const audible = state?.status === 'playing' && !state.waitingForAudio;
-  useEffect(() => ambient.setActive(!!audible), [audible]);
+  useEffect(() => {
+    ambient.setActive(!!audible);
+  }, [audible]);
   useEffect(() => () => ambient.setActive(false), []);
   return null;
 }
