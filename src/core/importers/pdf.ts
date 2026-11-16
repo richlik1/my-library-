@@ -199,6 +199,37 @@ export function mapPages(chapters: Chapter[], pageTexts: string[]): Chapter[] {
   return chapters.map((c, i) => (maps[i].length ? { ...c, pages: maps[i] } : c));
 }
 
+/**
+ * Page-bottom footnotes: a block of lines at the end of a page in a clearly smaller font than the body text,
+ * starting with a note mark (“1”, “*”, “†”). They are moved out of the body (into `notes`), never dropped.
+ */
+export function separateFootnotes(pages: Line[][]): { pages: Line[][]; notes: string[] } {
+  const heights = pages.flat().map((l) => l.h).sort((a, b) => a - b);
+  const body = heights[Math.floor(heights.length / 2)] ?? 0;
+  const notes: string[] = [];
+  if (!body) return { pages, notes };
+  const out = pages.map((lines) => {
+    // By position, not drawing order: small lines below the lowest line of body text.
+    const bodyLines = lines.filter((l) => l.h >= body * 0.85);
+    if (!bodyLines.length) return lines;
+    const lowestBody = Math.min(...bodyLines.map((l) => l.y));
+    const block = lines.filter((l) => l.h < body * 0.85 && l.y < lowestBody).sort((a, b) => b.y - a.y);
+    if (!block.length || !/^(?:\d{1,3}|[*†‡§])\s?\S/.test(block[0].text)) return lines;
+    // Lines that begin a new note (“2 Another note”) start a new entry.
+    let cur = '';
+    for (const l of block) {
+      if (cur && /^(?:\d{1,3}|[*†‡§])\s\S/.test(l.text)) {
+        notes.push(cur);
+        cur = l.text;
+      } else cur = cur ? (/[A-Za-z]-$/.test(cur) ? cur.slice(0, -1) + l.text : `${cur} ${l.text}`) : l.text;
+    }
+    if (cur) notes.push(cur);
+    const moved = new Set(block);
+    return lines.filter((l) => !moved.has(l));
+  });
+  return { pages: out, notes };
+}
+
 /** Turns the lines of one page into paragraphs separated by "\n\n". */
 export function linesToText(lines: Line[]): string {
   if (!lines.length) return '';
@@ -405,7 +436,8 @@ export async function importPdf(
     onProgress?.(1, 'Organising chapters');
 
     const printed = printedPageNumbers(pageLines);
-    const pageTexts = stripHeadersFooters(pageLines).map(linesToText);
+    const { pages: bodyLines, notes: footnotes } = separateFootnotes(stripHeadersFooters(pageLines));
+    const pageTexts = bodyLines.map(linesToText);
     const totalChars = pageTexts.reduce((s, t) => s + t.replace(/\s/g, '').length, 0);
     if (totalChars < 50) {
       if (imageOnlyPages.length > 0) throw new ImportError(OCR_EXPLANATION, 'needs-ocr');
@@ -432,6 +464,7 @@ export async function importPdf(
     }
 
     const ocr: OcrReport | undefined = imageOnlyPages.length ? { totalPages: doc.numPages, imageOnlyPages } : undefined;
+    if (footnotes.length) chapters.push({ title: 'Notes', text: footnotes.join('\n\n'), kind: 'notes' });
     const signals: ImportSignals = { structure, pages: doc.numPages, ...(blankPages.length ? { blankPages } : {}), ...(printed.length ? { printedPageNumbers: printed } : {}), ...(outOfOrder.length ? { tocOutOfOrder: outOfOrder } : {}) };
     return { title, author, format: 'pdf', cover, chapters: mapPages(finalizeChapters(chapters), pageTexts), ocr, signals };
   } finally {
