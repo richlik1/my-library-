@@ -115,6 +115,7 @@ export const audioQueue = new AudioQueue({
   chapterText: async (bookId, chapter) => (await getContent(bookId))?.chapters[chapter]?.text,
   voiceFor: async (bookId) => naturalVoiceFor(await getBook(bookId)),
   chapterAudio: getChapterAudio,
+  language: async (bookId) => (await getBook(bookId))?.language,
   putAudio,
   deleteAudio,
   options: async (bookId) => {

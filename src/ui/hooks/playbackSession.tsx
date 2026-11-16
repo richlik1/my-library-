@@ -51,7 +51,9 @@ async function loadSession(id: string): Promise<Session | null> {
   let book = stored;
   if (!book || !content) return null;
   const fast = fastVoiceReady();
-  if (!book.narration && fast && !isSequenceEngine(speechEngine)) {
+  // The natural voices speak English: books in other languages keep the device voice (which can speak them).
+  const english = !book.language || /^en\b/i.test(book.language);
+  if (!book.narration && fast && english && !isSequenceEngine(speechEngine)) {
     // A new book: use the fast natural voice this device already has (it keeps playing with the screen locked).
     const narration = { engine: 'piper' as const, voice: fast };
     await updateBook(id, { narration });

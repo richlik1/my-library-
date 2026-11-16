@@ -132,6 +132,12 @@ export function NarrationPanel({
       <div className="rate-head" style={{ marginBottom: 8 }}>
         <span>Voice</span>
       </div>
+      {book.language && !/^en\b/i.test(book.language) && (
+        <p className="small" style={{ margin: '0 0 10px', color: 'var(--accent)' }} role="note">
+          This book is in another language ({book.language}). The natural voices speak English only, so use the device voice: choose a
+          voice in that language in Settings.
+        </p>
+      )}
       <div className="seg-nav" role="radiogroup" aria-label="Narration">
         <a
           href="#"

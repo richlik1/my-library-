@@ -1,6 +1,7 @@
 import { chunkText, type Chunk } from '../speech/chunker';
 import type { ChunkTiming, NeuralEngine } from './types';
 import { encodeWav, polishSpeech } from './wav';
+import { normalizeForSpeech } from './speechText';
 
 export class ChunkGenerationError extends Error {
   constructor(
@@ -23,6 +24,8 @@ export interface GenerateOptions {
   paragraphPause?: number;
   /** Words to say differently: { "StayOps": "Stay Ops" }. Applied before synthesis only. */
   pronunciations?: Record<string, string>;
+  /** Language of the book; English text is normalised for speech (money, decades, numerals, abbreviations). */
+  language?: string;
 }
 
 export interface GeneratedChapter {
@@ -69,7 +72,8 @@ export async function generatePart(engine: NeuralEngine, chunks: Chunk[], [from,
   for (let i = from; i < to; i++) {
     if (opts.signal?.aborted) throw abortError();
     const c = chunks[i];
-    const spoken = applyPronunciations(c.text, opts.pronunciations);
+    // Your pronunciations first, then the narrator's reading of money, dates, numerals and abbreviations.
+    const spoken = normalizeForSpeech(applyPronunciations(c.text, opts.pronunciations), opts.language);
     let result: Awaited<ReturnType<NeuralEngine['synthesize']>> | null = null;
     let lastError: unknown = null;
     for (let attempt = 0; attempt <= retries && !result; attempt++) {
