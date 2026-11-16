@@ -6,8 +6,10 @@ import { placeLabel } from '../../core/types';
 import { useToast } from '../hooks/toast';
 import { Icon } from './Icon';
 import { Sheet } from './Sheet';
+import { AiAction } from './AiAssistant';
+import { getAiConfig } from '../../core/assistant';
 
-export type AskMode = 'explain' | 'apply' | 'ask';
+export type AskMode = 'explain' | 'apply' | 'ask' | 'study';
 
 /** Shows a passage with the matching words in bold. */
 function Marked({ text, query }: { text: string; query: string }) {
@@ -62,7 +64,12 @@ export function AskSheet({
   const hits = useMemo(() => (asked ? index.search(asked, { k: 6, chapter: position.chapter }) : []), [index, asked, position.chapter]);
   const chapterNotes = annotations.filter((a) => a.chapter === position.chapter && a.note);
   const actions = annotations.filter((a) => a.tags?.includes('action'));
-  const ai = aiAnswerAvailability();
+  const ai = getAiConfig() ? { reason: 'AI answers are on (your Claude key). They are labelled as interpretations and cite the book’s passages.' } : aiAnswerAvailability();
+  const [word, setWord] = useState('');
+  const [goal, setGoal] = useState('');
+  const [compareWith, setCompareWith] = useState(position.chapter > 0 ? position.chapter - 1 : Math.min(1, chapters.length - 1));
+  const offset = sentence?.start ?? position.offset;
+  const aiProps = { book, chapters, index, onGo, onSaved };
   const chapterTitle = chapters[position.chapter]?.title ?? `Chapter ${position.chapter + 1}`;
 
   const Hit = ({ h, query }: { h: SearchHit | { chapter: number; start: number; text: string; chapterTitle?: string }; query: string }) => (
@@ -90,6 +97,7 @@ export function AskSheet({
             ['explain', 'Explain this'],
             ['apply', 'Apply it'],
             ['ask', 'Search the book'],
+            ['study', 'Study'],
           ] as const
         ).map(([m, label]) => (
           <a
@@ -119,6 +127,15 @@ export function AskSheet({
             <p className="focus">{focus}</p>
             {around.after && <p className="ctx">{around.after.text.slice(0, 300)}</p>}
           </div>
+          <AiAction key={`explain-${focus}`} label="Explain with AI" request={focus ? { task: 'explain', input: focus, chapter: position.chapter, offset } : null} {...aiProps} />
+          <form
+            className="row"
+            style={{ display: 'flex', gap: 8, marginTop: 10 }}
+            onSubmit={(e) => e.preventDefault()}
+          >
+            <input className="input" style={{ flex: 1 }} value={word} onChange={(e) => setWord(e.target.value)} placeholder="A word to define" aria-label="Word to define" />
+          </form>
+          {word.trim() && <AiAction key={`define-${word}`} label={`Define “${word.trim()}”`} request={{ task: 'define', input: word.trim(), chapter: position.chapter, offset }} {...aiProps} />}
           <h4 className="ask-h">Where the book says more about this</h4>
           {related.length ? (
             <ul className="hits">
@@ -219,6 +236,31 @@ export function AskSheet({
             ) : (
               <p className="small muted">This book doesn’t seem to cover that: no passages use those words.</p>
             ))}
+          {asked && hits.length > 0 && <AiAction key={`ask-${asked}`} label="Ask AI about this" request={{ task: 'ask', input: asked, chapter: position.chapter, offset }} {...aiProps} />}
+        </>
+      )}
+
+      {mode === 'study' && (
+        <>
+          <h4 className="ask-h">This chapter · {chapterTitle}</h4>
+          <div className="study-grid">
+            <AiAction key="sum" label="Summarize this chapter" request={{ task: 'summarize', input: '', chapter: position.chapter, offset }} {...aiProps} />
+            <AiAction key="q" label="Study questions" request={{ task: 'questions', input: '', chapter: position.chapter, offset }} {...aiProps} />
+            <AiAction key="f" label="Make flashcards" request={{ task: 'flashcards', input: '', chapter: position.chapter, offset }} {...aiProps} />
+            <AiAction key="l" label="Key lessons" request={{ task: 'lessons', input: '', chapter: position.chapter, offset }} {...aiProps} />
+          </div>
+          <h4 className="ask-h">Action plan</h4>
+          <input className="input" value={goal} onChange={(e) => setGoal(e.target.value)} placeholder="Your goal (optional), e.g. run a calmer team" aria-label="Your goal" />
+          <AiAction key={`plan-${goal}`} label="Make an action plan" request={{ task: 'plan', input: goal, chapter: position.chapter, offset }} {...aiProps} />
+          {chapters.length > 1 && (
+            <>
+              <h4 className="ask-h">Compare with another chapter</h4>
+              <select className="input" value={compareWith} onChange={(e) => setCompareWith(Number(e.target.value))} aria-label="Chapter to compare with">
+                {chapters.map((c, i) => (i === position.chapter ? null : <option key={i} value={i}>{c.title}</option>))}
+              </select>
+              <AiAction key={`cmp-${compareWith}`} label="Compare the chapters" request={{ task: 'compare', input: '', chapter: position.chapter, offset, otherChapter: compareWith }} {...aiProps} />
+            </>
+          )}
         </>
       )}
     </Sheet>

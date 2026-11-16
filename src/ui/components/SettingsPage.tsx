@@ -14,6 +14,7 @@ import { benchmarkVoice, describeBenchmark } from '../../core/audio/benchmark';
 import { DEFAULT_KOKORO_VOICE, getVoiceLog, voiceThreads } from '../../core/audio/kokoroEngine';
 import { neuralEngine, kokoroUnavailable } from '../narration';
 import { SoundCheck } from './SoundCheck';
+import { AiSettings } from './AiAssistant';
 
 export function SettingsPage() {
   const { settings, update } = useSettings();
@@ -451,6 +452,8 @@ export function SettingsPage() {
         </section>
       )}
 
+      <AiSettings />
+
       <section className="card">
         <h3>Scanned PDFs</h3>
         <p style={{ marginBottom: 0 }}>{OCR_EXPLANATION}</p>
@@ -462,7 +465,7 @@ export function SettingsPage() {
           My Library has no account, no server, no analytics and no tracking. Books, progress and notes are stored only in this browser’s
           private storage on this device. Device voices are your device’s built-in voices (some “online” voices on Chrome/Android may use
           the browser maker’s speech service — the voice list marks them). Natural voice downloads the free Kokoro voice model once from
-          Hugging Face; after that, audio is made on this device and your book text never leaves it.
+          Hugging Face; after that, audio is made on this device and your book text never leaves it. The optional AI assistant (off unless you add your own key) sends only the passages needed for each question to Anthropic.
         </p>
       </section>
       <p className="muted small" style={{ textAlign: 'center' }}>

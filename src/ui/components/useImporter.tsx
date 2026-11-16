@@ -14,6 +14,7 @@ interface Failure {
   name: string;
   message: string;
   needsOcr: boolean;
+  file: File;
   /** Technical details to send for support. */
   details: string;
 }
@@ -54,7 +55,7 @@ export function useImporter(onImported: (books: Book[], openDetails: boolean) =>
   }, [toast]);
 
   const run = useCallback(
-    async (files: File[], opts: { allowDuplicates?: boolean } = {}) => {
+    async (files: File[], opts: { allowDuplicates?: boolean; ocr?: boolean } = {}) => {
       if (!files.length) return;
       requestPersistentStorage();
       const added: Book[] = [];
@@ -79,7 +80,7 @@ export function useImporter(onImported: (books: Book[], openDetails: boolean) =>
           const imported = await importFile(file, (fraction, label) => {
             stage = label;
             setBusy((b) => (b ? { ...b, fraction, label } : b));
-          });
+          }, { ocr: opts.ocr });
           stage = 'saving to your library';
           setBusy((b) => (b ? { ...b, fraction: 1, label: 'Saving to your library…' } : b));
           const fileInfo = { name: file.name, size: file.size, type: file.type, data: file, hash };
@@ -101,6 +102,7 @@ export function useImporter(onImported: (books: Book[], openDetails: boolean) =>
           const quota = err?.name === 'QuotaExceededError';
           failed.push({
             name: file.name,
+            file,
             needsOcr: e instanceof ImportError && e.kind === 'needs-ocr',
             details: `File: ${file.name} (${file.type || 'no type'}, ${Math.round(file.size / 1024)} KB)\nStep: ${stage}\nError: ${err?.name ?? 'Error'}: ${err?.message ?? String(e)}\nDevice: ${deviceInfo()}\nApp: ${__APP_VERSION__}`,
             message:
@@ -268,8 +270,26 @@ export function useImporter(onImported: (books: Book[], openDetails: boolean) =>
               </div>
             </div>
           ))}
-          <button className="btn btn-primary btn-block" onClick={() => setFailures([])}>
-            OK
+          {failures.some((f) => f.needsOcr) && (
+            <>
+              <p className="small">
+                My Library can read the scanned pages itself, on this device (nothing is uploaded). It downloads the reading engine once
+                (about 7 MB) and takes a few seconds per page. Check the result afterwards: OCR can misread words.
+              </p>
+              <button
+                className="btn btn-primary btn-block"
+                onClick={() => {
+                  const files = failures.filter((f) => f.needsOcr).map((f) => f.file);
+                  setFailures([]);
+                  void run(files, { ocr: true, allowDuplicates: true });
+                }}
+              >
+                Read scanned pages with OCR
+              </button>
+            </>
+          )}
+          <button className={`btn btn-block ${failures.some((f) => f.needsOcr) ? '' : 'btn-primary'}`} style={{ marginTop: 8 }} onClick={() => setFailures([])}>
+            {failures.some((f) => f.needsOcr) ? 'Not now' : 'OK'}
           </button>
         </Sheet>
       )}

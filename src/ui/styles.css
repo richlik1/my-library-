@@ -2450,3 +2450,12 @@ main.with-tabs .page {
 .import-review {
   padding-bottom: calc(var(--safe-bottom) + var(--tabbar-h) + 96px);
 }
+
+/* AI assistant */
+.ai-action { margin-top: 10px; }
+.ai-answer { margin-top: 10px; border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent); border-radius: 14px; padding: 12px; background: color-mix(in srgb, var(--accent) 7%, transparent); }
+.ai-label { font-size: 12px; font-weight: 600; letter-spacing: .02em; color: var(--accent); margin-bottom: 6px; }
+.ai-text p { margin: 0 0 8px; white-space: pre-wrap; }
+.warn-text { color: var(--warn, #e0a83a); }
+.study-grid { display: grid; gap: 4px; }
+.ai-off { margin-top: 10px; }
