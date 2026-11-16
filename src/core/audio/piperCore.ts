@@ -77,9 +77,14 @@ export class PiperVoiceRunner {
     ort.env.wasm.proxy = false;
     let t = performance.now();
     this.config = JSON.parse(new TextDecoder().decode((await cachedBytes(configUrl, () => undefined)).bytes)) as PiperConfig;
-    const model = await cachedBytes(modelUrl, (loaded, total) =>
-      onProgress(total ? loaded / total : 0, `Downloading the voice (${Math.round(loaded / 1e6)} of ${Math.round(total / 1e6) || '?'} MB)…`),
-    );
+    // Reported once per megabyte, not per download chunk (thousands of messages would keep the screen busy).
+    let lastMb = -1;
+    const model = await cachedBytes(modelUrl, (loaded, total) => {
+      const mb = Math.round(loaded / 1e6);
+      if (mb === lastMb) return;
+      lastMb = mb;
+      onProgress(total ? loaded / total : 0, `Downloading the voice (${mb} of ${Math.round(total / 1e6) || '?'} MB)…`);
+    });
     this.log(`model ${model.cached ? 'from storage' : 'downloaded'} (${Math.round(model.bytes.byteLength / 1e6)} MB) in ${secs(t)}`);
     onProgress(1, 'Starting the voice…');
     t = performance.now();

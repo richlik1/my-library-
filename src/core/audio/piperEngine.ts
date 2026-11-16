@@ -129,8 +129,14 @@ export class PiperEngine implements NeuralEngine {
       if (stall) clearTimeout(stall);
       stall = setTimeout(() => fail(new Error('The voice stopped responding while starting')), LOAD_STALL_MS);
     };
+    // Every chunk of the download reports progress (about a thousand messages, all at once when the model comes from
+    // the cache); the screen only needs to hear when the label or whole percent changes, so taps stay responsive.
+    let shown = '';
     const progress = (f: number, l: string) => {
       arm();
+      const key = `${l}|${Math.floor(f * 100)}`;
+      if (key === shown) return;
+      shown = key;
       onProgress(f, l);
     };
     arm();
