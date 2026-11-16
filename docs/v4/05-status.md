@@ -21,6 +21,12 @@ Everything below is on `dev`. Production (`main`, the live site) is unchanged; d
 | Storage and backups | Storage per book (narration audio, original file) with "Delete audio"; backups keep language, page maps, file fingerprint, review state, reading settings; AI key never in backups | `tests/storage.test.ts`, `e2e/ai.spec.ts` |
 | Native iOS app | Compiles for the iOS Simulator, installs and launches (screenshot on the `ios-shots` branch) | CI `ios-simulator` job (informational) |
 
+CI on the latest `dev` commit: Chromium job green; WebKit required step 16/16 (real voice; taps answered within
+95 ms even while the voice is stuck); iOS Simulator build green. In the informational WebKit full run, 44 of 47 pass;
+the 3 that fail all reload the page while offline and stop with "WebKit encountered an internal error" in the test
+browser. They failed the same way before this work, and the same tests pass in Chromium. Offline restart in Safari
+itself is part of the device checklist below.
+
 Bug fixed on the way: every screen change could crash the app in newer browsers (`window.scrollTo` returning a
 Promise inside a React effect). Fixed on `dev`; the live site still has it until you approve a deploy.
 
