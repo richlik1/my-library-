@@ -110,6 +110,25 @@ describe('library storage', () => {
     expect(await listBooks()).toHaveLength(1);
   });
 
+  it('backups keep import details: language, page numbers, file fingerprint, review state and reading settings', async () => {
+    const withPages = {
+      ...imported,
+      language: 'fr',
+      signals: { structure: 'headings' as const },
+      chapters: imported.chapters.map((c, i) => (i === 0 ? { ...c, pages: [{ offset: 0, page: 7 }] } : c)),
+    };
+    const book = await saveImportedBook(withPages, { name: 'p.txt', size: 5, type: 'text/plain', data: new Blob(['hello']), hash: 'abc123' }, 'Fiction', false, { needsReview: true });
+    await saveSettings({ ...(await getSettings()), readingSpacing: 'extra', readerFont: 'sans' });
+    const json = JSON.stringify(await createBackup(false));
+    expect(json).not.toContain('sk-ant-');
+    await clearAll();
+    await restoreBackup(parseBackup(json), { restoreSettings: true });
+    const restored = (await listBooks())[0];
+    expect(restored).toMatchObject({ id: book.id, language: 'fr', fileHash: 'abc123', needsReview: true, signals: { structure: 'headings' } });
+    expect((await getContent(book.id))!.chapters[0].pages).toEqual([{ offset: 0, page: 7 }]);
+    expect(await getSettings()).toMatchObject({ readingSpacing: 'extra', readerFont: 'sans' });
+  });
+
   it('adds the new default categories to an existing list once, keeping custom ones', async () => {
     await (await db()).put('kv', { ...(await getSettings()), categories: ['Fiction', 'My Custom'], categoriesVersion: 1 }, 'settings');
     const s = await getSettings();

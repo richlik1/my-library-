@@ -34,6 +34,11 @@ function ThemeSync() {
     const light = settings.theme === 'light' || (settings.theme === 'system' && window.matchMedia?.('(prefers-color-scheme: light)').matches);
     meta?.setAttribute('content', light ? '#f7f4ee' : '#0b0b10');
   }, [settings.theme]);
+  useEffect(() => {
+    const root = document.documentElement;
+    root.dataset.readerFont = settings.readerFont ?? 'serif';
+    root.dataset.spacing = settings.readingSpacing ?? 'normal';
+  }, [settings.readerFont, settings.readingSpacing]);
   return null;
 }
 

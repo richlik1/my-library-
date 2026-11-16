@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { OCR_EXPLANATION } from '../../core/importers';
 import { exportBackupBlob, parseBackup, restoreBackup } from '../../core/storage/backup';
-import { requestPersistentStorage, storageEstimate } from '../../core/storage/db';
+import { deleteBookAudio, requestPersistentStorage, storageByBook, storageEstimate } from '../../core/storage/db';
 import { useSettings } from '../hooks/settings';
 import { useToast } from '../hooks/toast';
 import { goBack } from '../hooks/useRoute';
@@ -20,6 +20,7 @@ export function SettingsPage() {
   const { settings, update } = useSettings();
   const toast = useToast();
   const [usage, setUsage] = useState<{ usage: number; quota: number } | null>(null);
+  const [byBook, setByBook] = useState<Awaited<ReturnType<typeof storageByBook>>>([]);
   const [persisted, setPersisted] = useState<boolean | null>(null);
   const [busy, setBusy] = useState(false);
   const [newCat, setNewCat] = useState('');
@@ -54,6 +55,7 @@ export function SettingsPage() {
 
   const refreshStorage = async () => {
     setUsage(await storageEstimate());
+    setByBook(await storageByBook().catch(() => []));
     try {
       setPersisted((await navigator.storage?.persisted?.()) ?? null);
     } catch {
@@ -157,6 +159,34 @@ export function SettingsPage() {
         ) : (
           <p>Storage information is not available in this browser.</p>
         )}
+        {byBook.length > 0 && (
+          <ul className="storage-list" aria-label="Storage by book">
+            {byBook.slice(0, 12).map((r) => (
+              <li key={r.bookId}>
+                <span className="storage-title">{r.title}</span>
+                <span className="small muted">
+                  {r.audioBytes > 0 && `Narration ${formatBytes(r.audioBytes)}`}
+                  {r.audioBytes > 0 && r.fileBytes > 0 && ' · '}
+                  {r.fileBytes > 0 && `Original file ${formatBytes(r.fileBytes)}`}
+                </span>
+                {r.audioBytes > 0 && (
+                  <button
+                    className="pill"
+                    aria-label={`Delete narration audio for ${r.title}`}
+                    onClick={async () => {
+                      await deleteBookAudio(r.bookId);
+                      toast('Narration audio deleted. The book and your place are kept; audio is made again when you play it.');
+                      setByBook(await storageByBook());
+                      setUsage(await storageEstimate());
+                    }}
+                  >
+                    Delete audio
+                  </button>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
         <p>
           {isNativeApp()
             ? 'Your books are stored inside the app on this iPhone. Deleting the app deletes them, so keep a backup in Files or iCloud Drive.'
@@ -219,6 +249,45 @@ export function SettingsPage() {
             aria-label="Text size"
           />
         </div>
+        <div className="setting-label small" style={{ marginTop: 12 }}>Typeface</div>
+        <div className="seg-nav" role="radiogroup" aria-label="Typeface">
+          {([['serif', 'Book serif'], ['sans', 'Plain sans']] as const).map(([v, name]) => (
+            <a
+              key={v}
+              href="#"
+              role="radio"
+              aria-checked={(settings.readerFont ?? [['serif', 'Book serif'], ['sans', 'Plain sans']][0][0]) === v}
+              className={(settings.readerFont ?? [['serif', 'Book serif'], ['sans', 'Plain sans']][0][0]) === v ? 'active' : ''}
+              onClick={(e) => {
+                e.preventDefault();
+                update({ readerFont: v });
+              }}
+            >
+              {name}
+            </a>
+          ))}
+        </div>
+        <div className="setting-label small" style={{ marginTop: 12 }}>Spacing</div>
+        <div className="seg-nav" role="radiogroup" aria-label="Spacing">
+          {([['normal', 'Normal'], ['relaxed', 'Relaxed'], ['extra', 'Extra']] as const).map(([v, name]) => (
+            <a
+              key={v}
+              href="#"
+              role="radio"
+              aria-checked={(settings.readingSpacing ?? [['normal', 'Normal'], ['relaxed', 'Relaxed'], ['extra', 'Extra']][0][0]) === v}
+              className={(settings.readingSpacing ?? [['normal', 'Normal'], ['relaxed', 'Relaxed'], ['extra', 'Extra']][0][0]) === v ? 'active' : ''}
+              onClick={(e) => {
+                e.preventDefault();
+                update({ readingSpacing: v });
+              }}
+            >
+              {name}
+            </a>
+          ))}
+        </div>
+        <p className="small muted" style={{ margin: '6px 0 10px' }}>
+          More space between lines, words and letters makes text easier to follow for many readers, including people with dyslexia.
+        </p>
         <label className="switch">
           <span>
             Follow along

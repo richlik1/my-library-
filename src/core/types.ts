@@ -150,6 +150,10 @@ export interface Settings {
   followAlong: boolean;
   /** Reader text size in px. */
   fontSize: number;
+  /** Reader typeface: book serif, or a plain sans-serif many people find easier. */
+  readerFont?: 'serif' | 'sans';
+  /** Reader spacing: more space between lines, words and letters helps many readers, including people with dyslexia. */
+  readingSpacing?: 'normal' | 'relaxed' | 'extra';
   /** Keep the screen awake while narrating (speech stops if the iPhone locks). */
   keepAwake: boolean;
   /** Show novelty voices (Bells, Bubbles, Zarvox…) in the voice list. */
@@ -201,7 +205,7 @@ export const DEFAULT_SETTINGS: Settings = {
   narrationPause: 'normal',
   pronunciations: [],
   presets: [],
-  theme: 'system',
+  theme: 'dark',
   personalizedDiscover: true,
   habits: true,
   streaks: true,

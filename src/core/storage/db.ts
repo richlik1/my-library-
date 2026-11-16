@@ -465,6 +465,19 @@ export async function audioCacheBytes(): Promise<number> {
   return all.reduce((s, a) => s + 44 + Math.round(a.duration * a.sampleRate) * 2, 0);
 }
 
+/** What each book takes on this device: narration audio and the kept original file (text is small). */
+export async function storageByBook(): Promise<Array<{ bookId: string; title: string; audioBytes: number; fileBytes: number }>> {
+  const d = await db();
+  const [books, audio, fileKeys] = await Promise.all([d.getAll('books'), d.getAll('audio'), d.getAllKeys('files')]);
+  const kept = new Set(fileKeys.map(String));
+  const audioBy = new Map<string, number>();
+  for (const a of audio) audioBy.set(a.bookId, (audioBy.get(a.bookId) ?? 0) + 44 + Math.round(a.duration * a.sampleRate) * 2);
+  return books
+    .map((b) => ({ bookId: b.id, title: b.title, audioBytes: audioBy.get(b.id) ?? 0, fileBytes: kept.has(b.id) ? b.fileSize : 0 }))
+    .filter((r) => r.audioBytes + r.fileBytes > 0)
+    .sort((x, y) => y.audioBytes + y.fileBytes - (x.audioBytes + x.fileBytes));
+}
+
 // ---- Quick Listen summaries ----------------------------------------------------
 
 export async function listSummaries(bookId: string): Promise<Summary[]> {

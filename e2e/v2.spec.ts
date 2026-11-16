@@ -177,3 +177,23 @@ test('cover view: big cover, the sentence being heard and time left; remembered 
   await page.getByRole('button', { name: 'Show text' }).click();
   await expect(page.locator('.reader')).toContainText('The first chapter opens here.');
 });
+
+test('reading comfort: dark by default, plain typeface and extra spacing apply to the reader', async ({ page }) => {
+  await page.emulateMedia({ colorScheme: 'light' });
+  await addBook(page, 'Comfort');
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+  await page.goto('./#/settings');
+  await page.getByRole('radio', { name: 'Plain sans' }).click();
+  await page.getByRole('radio', { name: 'Extra' }).click();
+  await page.goto('./');
+  await page.getByRole('button', { name: 'Open Comfort' }).click();
+  const reader = page.locator('.reader-inner');
+  await expect(reader).toBeVisible();
+  const style = await reader.evaluate((el) => {
+    const cs = getComputedStyle(el);
+    return { lh: parseFloat(cs.lineHeight) / parseFloat(cs.fontSize), ls: parseFloat(cs.letterSpacing), font: cs.fontFamily };
+  });
+  expect(style.lh).toBeGreaterThan(2);
+  expect(style.ls).toBeGreaterThan(0);
+  expect(style.font).not.toContain('Georgia');
+});
