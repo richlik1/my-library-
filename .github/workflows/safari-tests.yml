@@ -71,3 +71,42 @@ jobs:
         timeout-minutes: 12
         continue-on-error: true
         run: npx playwright test --project=iphone-safari --reporter=list --retries=0 --timeout=45000 --max-failures=10 --grep-invert "real Kokoro|real Piper"
+
+  # The native iOS app (Capacitor): compiled for the iOS Simulator, installed, launched, and a screenshot saved.
+  # No Apple account needed (unsigned Simulator build). Informational until it has passed a few times.
+  ios-simulator:
+    runs-on: macos-latest
+    timeout-minutes: 40
+    continue-on-error: true
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build && npx cap sync ios
+      - name: Build for the iOS Simulator
+        run: |
+          xcodebuild -project ios/App/App.xcodeproj -scheme App -configuration Debug -sdk iphonesimulator \
+            -destination 'generic/platform=iOS Simulator' -derivedDataPath $RUNNER_TEMP/dd CODE_SIGNING_ALLOWED=NO build | tail -40
+      - name: Install, launch and screenshot in an iPhone Simulator
+        run: |
+          DEVICE=$(xcrun simctl list devices available -j | python3 -c "import sys,json; d=json.load(sys.stdin)['devices']; print(next(x['udid'] for k in sorted(d, reverse=True) if 'iOS' in k for x in d[k] if 'iPhone' in x['name']))")
+          echo "Simulator: $DEVICE"
+          xcrun simctl boot "$DEVICE"
+          APP=$(find $RUNNER_TEMP/dd -name 'App.app' -path '*iphonesimulator*' | head -1)
+          xcrun simctl install "$DEVICE" "$APP"
+          xcrun simctl launch "$DEVICE" com.maliklyons.mylibrary
+          sleep 20
+          mkdir -p ios-shots && xcrun simctl io "$DEVICE" screenshot ios-shots/launch.png
+          xcrun simctl spawn "$DEVICE" launchctl list | grep -i mylibrary && echo "App is running"
+      - name: Save the screenshot to the ios-shots branch
+        if: always()
+        run: |
+          git config user.name "ios-simulator"; git config user.email "ios-simulator@users.noreply.github.com"
+          git fetch origin ios-shots || true
+          git checkout -B ios-shots
+          git add -f ios-shots/launch.png && git commit -m "iOS Simulator launch screenshot ${{ github.sha }} [skip ci]" && git push -f origin ios-shots || true
