@@ -28,7 +28,8 @@ export function parseTxt(raw: string, fileName: string): ImportedBook {
   if (a) author = a[1].trim();
 
   const text = unwrapLines(body);
-  return { title, author, format: 'txt', cover: null, chapters: finalizeChapters(detectChapters(text, title)) };
+  const chapters = detectChapters(text, title);
+  return { title, author, format: 'txt', cover: null, chapters: finalizeChapters(chapters), signals: { structure: chapters.length > 1 ? 'headings' : 'single' } };
 }
 
 export async function importTxt(file: Blob, fileName: string): Promise<ImportedBook> {

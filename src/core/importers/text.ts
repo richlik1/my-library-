@@ -117,7 +117,9 @@ export function splitLongChapters(chapters: Chapter[], max = MAX_CHAPTER_CHARS):
       }
     }
     if (cur) parts.push(cur);
-    parts.forEach((text, i) => out.push({ title: parts.length > 1 ? `${ch.title} (part ${i + 1} of ${parts.length})` : ch.title, text }));
+    parts.forEach((text, i) =>
+      out.push({ title: parts.length > 1 ? `${ch.title} (part ${i + 1} of ${parts.length})` : ch.title, text, ...(ch.kind ? { kind: ch.kind } : {}) }),
+    );
   }
   return out;
 }
@@ -139,7 +141,11 @@ function splitAtSentences(text: string, max: number): string[] {
 /** Final clean-up applied to every importer's output. */
 export function finalizeChapters(chapters: Chapter[]): Chapter[] {
   const cleaned = chapters
-    .map((c) => ({ title: (c.title || '').replace(/\s+/g, ' ').trim().slice(0, 140) || 'Untitled', text: normalizeText(c.text) }))
+    .map((c) => ({
+      title: (c.title || '').replace(/\s+/g, ' ').trim().slice(0, 140) || 'Untitled',
+      text: normalizeText(c.text),
+      ...(c.kind ? { kind: c.kind } : {}),
+    }))
     .filter((c) => c.text.length > 0);
   return splitLongChapters(cleaned);
 }

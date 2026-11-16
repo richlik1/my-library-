@@ -111,3 +111,41 @@ describe('PDF importer', () => {
     await expect(importPdfNode(new TextEncoder().encode('%PDF-garbage').buffer as ArrayBuffer, 'bad.pdf')).rejects.toMatchObject({ kind: 'corrupt' });
   });
 });
+
+describe('PDF source pages and quality signals', () => {
+  /** Pages with printed numbers 1, 2, 3, 7, 8 (pages 4–6 missing from the file) and one blank page. */
+  async function gappyPdf(): Promise<ArrayBuffer> {
+    const doc = await PDFDocument.create();
+    const font = await doc.embedFont(StandardFonts.TimesRoman);
+    const printed = [1, 2, 3, 7, 8];
+    printed.forEach((n, i) => {
+      const page = doc.addPage([420, 600]);
+      if (i === 0) page.drawText('Chapter 1', { x: 40, y: 540, size: 16, font });
+      if (i === 3) page.drawText('Chapter 2', { x: 40, y: 540, size: 16, font });
+      for (let l = 0; l < 6; l++) page.drawText(`Page ${n} line ${l + 1}: ${LOREM.slice(0, 60)}.`, { x: 40, y: 500 - l * 16, size: 11, font });
+      page.drawText(String(n), { x: 205, y: 30, size: 9, font });
+    });
+    doc.addPage([420, 600]); // blank
+    return (await doc.save()).buffer as ArrayBuffer;
+  }
+
+  it('keeps the source page of each part of the text, and reports missing and blank pages', async () => {
+    const book = await importPdfNode(await gappyPdf(), 'gappy.pdf');
+    expect(book.signals?.structure).toBe('headings');
+    expect(book.signals?.blankPages).toEqual([6]);
+    expect(book.signals?.printedPageNumbers?.map((p) => p.printed)).toEqual([1, 2, 3, 7, 8]);
+    // Each chapter knows where its pages start, and the page text really is there.
+    const [c1, c2] = book.chapters;
+    expect(c1.pages?.map((p) => p.page)).toEqual([1, 2, 3]);
+    expect(c2.pages?.map((p) => p.page)).toEqual([4, 5]);
+    for (const c of book.chapters) for (const p of c.pages ?? []) expect(c.text.slice(p.offset, p.offset + 8)).toMatch(/^Page \d/);
+
+    const { buildImportReport } = await import('../src/core/importers/report');
+    const report = buildImportReport(book);
+    const messages = report.flags.map((f) => f.message).join('\n');
+    expect(messages).toContain('skip 4–6');
+    expect(messages).toContain('Page 6 had no text');
+    expect(report.order.status).toBe('unverified'); // headings only: nothing in the file to compare with
+    expect(report.chapters[1].pageRange).toEqual([4, 5]);
+  });
+});

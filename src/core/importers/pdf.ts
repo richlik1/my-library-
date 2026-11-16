@@ -1,4 +1,4 @@
-import type { Chapter, ImportedBook, OcrReport } from '../types';
+import type { Chapter, ImportSignals, ImportedBook, OcrReport } from '../types';
 import { ImportError, OCR_EXPLANATION } from './errors';
 import { MAX_CHAPTER_CHARS, detectChapters, finalizeChapters, isHeading, titleFromFileName } from './text';
 
@@ -150,6 +150,55 @@ export function stripHeadersFooters(pages: Line[][]): Line[][] {
   });
 }
 
+/** Printed page numbers: a line at the top or bottom of a page that is just a number (e.g. “12”, “Page 12”). */
+export function printedPageNumbers(pages: Line[][]): Array<{ page: number; printed: number }> {
+  const out: Array<{ page: number; printed: number }> = [];
+  pages.forEach((lines, i) => {
+    const edges = [...lines.slice(0, 2), ...lines.slice(-2)];
+    for (const l of edges) {
+      const m = /^(?:page\s*)?(\d{1,4})(?:\s*(?:of|\/)\s*\d{1,4})?$/i.exec(l.text.trim());
+      if (m) {
+        out.push({ page: i + 1, printed: Number(m[1]) });
+        break;
+      }
+    }
+  });
+  // Keep only numbers that mostly move with the pages (not stray numbers like a year in a header).
+  const consistent = out.filter((p, i) => {
+    const q = out[i + 1] ?? out[i - 1];
+    return q && Math.abs(q.printed - p.printed - (q.page - p.page)) <= 3;
+  });
+  return consistent.length >= 3 ? consistent : [];
+}
+
+/**
+ * Where each page starts in the final chapter texts: the first words of each page are looked up in order.
+ * Pages that can't be found (blank, or merged into a heading) are skipped; nothing is guessed.
+ */
+export function mapPages(chapters: Chapter[], pageTexts: string[]): Chapter[] {
+  const key = (s: string) => s.replace(/\s+/g, ' ').trim().slice(0, 40);
+  let ci = 0;
+  let from = 0;
+  const maps: Array<Array<{ offset: number; page: number }>> = chapters.map(() => []);
+  pageTexts.forEach((t, i) => {
+    // A page's first paragraph may have become a chapter title, so try its first few paragraphs.
+    for (const para of t.split(/\n\n+/).slice(0, 3)) {
+      const k = key(para);
+      if (k.length < 12) continue;
+      for (let c = ci; c < chapters.length; c++) {
+        const at = chapters[c].text.indexOf(k, c === ci ? from : 0);
+        if (at >= 0) {
+          maps[c].push({ offset: at, page: i + 1 });
+          ci = c;
+          from = at + 1;
+          return;
+        }
+      }
+    }
+  });
+  return chapters.map((c, i) => (maps[i].length ? { ...c, pages: maps[i] } : c));
+}
+
 /** Turns the lines of one page into paragraphs separated by "\n\n". */
 export function linesToText(lines: Line[]): string {
   if (!lines.length) return '';
@@ -210,7 +259,7 @@ export function joinPages(pages: string[]): string {
   return out;
 }
 
-async function resolveOutline(doc: PdfDoc): Promise<Array<{ title: string; page: number }>> {
+async function resolveOutline(doc: PdfDoc): Promise<Array<{ title: string; page: number; listed: number }>> {
   let outline: OutlineItem[] | null = null;
   try {
     outline = await doc.getOutline();
@@ -221,7 +270,7 @@ async function resolveOutline(doc: PdfDoc): Promise<Array<{ title: string; page:
   // Use the second level when the top level is just one wrapper entry.
   let items = outline;
   if (items.length < 3 && items.every((i) => i.items?.length)) items = items.flatMap((i) => [i, ...i.items]);
-  const out: Array<{ title: string; page: number }> = [];
+  const out: Array<{ title: string; page: number; listed: number }> = [];
   for (const item of items) {
     try {
       let dest = item.dest;
@@ -229,7 +278,7 @@ async function resolveOutline(doc: PdfDoc): Promise<Array<{ title: string; page:
       if (!Array.isArray(dest) || !dest.length) continue;
       const ref = dest[0];
       const page = typeof ref === 'number' ? ref : await doc.getPageIndex(ref);
-      out.push({ title: item.title, page });
+      out.push({ title: item.title, page, listed: out.length });
     } catch {
       /* ignore broken outline entries */
     }
@@ -331,6 +380,7 @@ export async function importPdf(
     );
     const pageLines: Line[][] = [];
     const imageOnlyPages: number[] = [];
+    const blankPages: number[] = [];
     let cover: string | null = null;
 
     for (let n = 1; n <= doc.numPages; n++) {
@@ -344,6 +394,7 @@ export async function importPdf(
         try {
           const ops = await page.getOperatorList();
           if (ops.fnArray.some((f) => imageOps.has(f))) imageOnlyPages.push(n);
+          else if (chars === 0) blankPages.push(n);
         } catch {
           /* ignore */
         }
@@ -353,6 +404,7 @@ export async function importPdf(
     }
     onProgress?.(1, 'Organising chapters');
 
+    const printed = printedPageNumbers(pageLines);
     const pageTexts = stripHeadersFooters(pageLines).map(linesToText);
     const totalChars = pageTexts.reduce((s, t) => s + t.replace(/\s/g, '').length, 0);
     if (totalChars < 50) {
@@ -366,14 +418,22 @@ export async function importPdf(
 
     const marks = await resolveOutline(doc);
     let chapters: Chapter[];
-    if (marks.length >= 2) chapters = chaptersFromOutline(pageTexts, marks);
-    else {
+    let structure: ImportSignals['structure'];
+    let outOfOrder: string[] = [];
+    if (marks.length >= 2) {
+      chapters = chaptersFromOutline(pageTexts, marks);
+      structure = 'outline';
+      // Bookmarks listed in a different order from their pages (the pages win; the report asks to check).
+      outOfOrder = marks.filter((m, i) => m.listed !== i).map((m) => m.title);
+    } else {
       const detected = detectChapters(joinPages(pageTexts), title);
+      structure = detected.length >= 2 ? 'headings' : 'pages';
       chapters = detected.length >= 2 ? detected : chaptersFromPages(pageTexts);
     }
 
     const ocr: OcrReport | undefined = imageOnlyPages.length ? { totalPages: doc.numPages, imageOnlyPages } : undefined;
-    return { title, author, format: 'pdf', cover, chapters: finalizeChapters(chapters), ocr };
+    const signals: ImportSignals = { structure, pages: doc.numPages, ...(blankPages.length ? { blankPages } : {}), ...(printed.length ? { printedPageNumbers: printed } : {}), ...(outOfOrder.length ? { tocOutOfOrder: outOfOrder } : {}) };
+    return { title, author, format: 'pdf', cover, chapters: mapPages(finalizeChapters(chapters), pageTexts), ocr, signals };
   } finally {
     task.destroy().catch(() => undefined);
   }

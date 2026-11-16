@@ -21,6 +21,7 @@ import { ToastProvider } from './hooks/toast';
 import { useRoute } from './hooks/useRoute';
 import { isNativeApp } from './platform';
 import { warmUpFastVoice } from './narration';
+import { ImportReview } from './components/ImportReview';
 
 /** Applies the chosen colour theme ('system' follows the device). */
 function ThemeSync() {
@@ -69,6 +70,7 @@ export function App() {
             {route.name === 'progress' && <ProgressPage />}
             {route.name === 'settings' && <SettingsPage />}
             {route.name === 'quotes' && <QuotesPage />}
+            {route.name === 'review' && <ImportReview key={route.id} id={route.id} />}
             {route.name === 'club' && <ClubPage />}
             {route.name === 'book' && <Player key={route.id} id={route.id} autoplay={route.autoplay} at={route.at} />}
             {route.name === 'growth' && <GrowthHome />}

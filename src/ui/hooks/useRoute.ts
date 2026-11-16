@@ -6,6 +6,7 @@ export type Route =
   | { name: 'discover' }
   | { name: 'progress' }
   | { name: 'book'; id: string; autoplay: boolean; at?: { chapter: number; offset: number } }
+  | { name: 'review'; id: string }
   | { name: 'quotes' }
   | { name: 'club' }
   | { name: 'settings' }
@@ -29,6 +30,7 @@ function parse(hash: string): Route {
       ...(at && at.length === 2 && at.every(Number.isFinite) ? { at: { chapter: at[0], offset: at[1] } } : {}),
     };
   }
+  if (first === 'review' && second) return { name: 'review', id: decodeURIComponent(second) };
   if (first === 'quotes') return { name: 'quotes' };
   if (first === 'club') return { name: 'club' };
   if (first === 'settings') return { name: 'settings' };

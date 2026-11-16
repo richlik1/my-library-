@@ -40,6 +40,8 @@ const paths: Record<string, string> = {
   headphones: 'M4 15v-3a8 8 0 0 1 16 0v3M4 15h3v6H5a1 1 0 0 1-1-1zM20 15h-3v6h2a1 1 0 0 0 1-1z',
   sparkle: 'M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8zM19 16l.8 2.2L22 19l-2.2.8L19 22l-.8-2.2L16 19l2.2-.8z',
   chevronDown: 'M5 9l7 7 7-7',
+  chevronUp: 'M5 15l7-7 7 7',
+  flag: 'M5 21V4M5 4h11l-2 4 2 4H5',
 };
 
 const filled = new Set(['play', 'pause', 'prevChapter', 'nextChapter']);

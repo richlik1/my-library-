@@ -146,3 +146,47 @@ describe('library storage', () => {
     expect(() => parseBackup('nope')).toThrow(/not valid JSON/);
   });
 });
+
+describe('chapter organizer on a saved book', () => {
+  it('reorders and splits chapters; highlights, notes and the reading position follow their text; old audio is cleared', async () => {
+    const { reorganizeBook, putAudio, listBookAudio, findBookByFileHash, fileHash } = await import('../src/core/storage/db');
+    const { organize, move, splitAt } = await import('../src/core/organizer');
+    const imported: ImportedBook = {
+      title: 'Organize Me',
+      author: '',
+      format: 'txt',
+      cover: null,
+      chapters: [
+        { title: 'Chapter 2', text: 'Second chapter first paragraph.\n\nSecond chapter second paragraph.' },
+        { title: 'Chapter 1', text: 'First chapter text.' },
+      ],
+    };
+    const data = new Blob(['raw']);
+    const hash = await fileHash(data);
+    const book = await saveImportedBook(imported, { name: 'o.txt', size: 3, type: 'text/plain', data, hash }, 'Other', true, { needsReview: true });
+    expect((await findBookByFileHash(hash))?.id).toBe(book.id);
+    expect(book.needsReview).toBe(true);
+    const quote = 'second paragraph';
+    const start = imported.chapters[0].text.indexOf(quote);
+    await saveAnnotation({ bookId: book.id, kind: 'highlight', chapter: 0, start, end: start + quote.length, quote, color: 'gold' });
+    await saveProgress({ bookId: book.id, chapter: 0, offset: start, percent: 0.5, updatedAt: 1, finished: false });
+    await putAudio({ key: `${book.id}:0`, bookId: book.id, chapter: 0, engine: 'x', voice: 'v', textHash: 'h', createdAt: 1, wav: new ArrayBuffer(44), sampleRate: 8000, duration: 0, timings: [] });
+
+    // Put Chapter 1 first, then split the (now second) chapter after its first paragraph.
+    let list = move(organize(imported.chapters), 1, -1);
+    list = splitAt(list, [...imported.chapters], 1, 1, 'Chapter 2, part two');
+    const { chapters, audioCleared } = await reorganizeBook(book.id, list);
+    expect(chapters.map((c) => c.title)).toEqual(['Chapter 1', 'Chapter 2', 'Chapter 2, part two']);
+    expect(audioCleared).toBe(true);
+    expect(await listBookAudio(book.id)).toEqual([]);
+
+    const [hl] = await listAnnotations(book.id);
+    expect(hl.chapter).toBe(2);
+    expect(chapters[2].text.slice(hl.start, hl.end)).toBe(quote);
+    const progress = await getProgress(book.id);
+    expect(progress?.chapter).toBe(2);
+    expect(chapters[2].text.slice(progress!.offset)).toMatch(/^second paragraph/);
+    expect((await listBooks()).find((b) => b.id === book.id)?.needsReview).toBe(false);
+    expect((await getContent(book.id))?.chapters.length).toBe(3);
+  });
+});

@@ -2308,3 +2308,145 @@ main.with-tabs .page {
   min-height: 3em;
   color: var(--text);
 }
+
+/* Import Quality Review and Chapter Organizer */
+.review-summary .review-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  margin-top: 8px;
+  font-size: 14px;
+}
+.badge-conf {
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.badge-conf.ok {
+  background: rgba(127, 214, 164, 0.16);
+  color: var(--ok);
+}
+.badge-conf.check {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.badge-conf.bad {
+  background: rgba(255, 122, 107, 0.16);
+  color: var(--danger);
+}
+.review-flags {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+  font-size: 13.5px;
+}
+.review-flags li {
+  display: flex;
+  gap: 6px;
+  align-items: flex-start;
+}
+.review-flags .sev-problem {
+  color: var(--danger);
+}
+.review-flags .sev-check {
+  color: var(--accent);
+}
+.review-flags .sev-info {
+  color: var(--text-2);
+}
+.organizer {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 8px;
+}
+.org-row {
+  background: var(--surface-2, rgba(255, 255, 255, 0.04));
+  border: 1px solid var(--line, rgba(255, 255, 255, 0.08));
+  border-radius: 14px;
+  padding: 10px 12px;
+}
+.org-row.removed {
+  opacity: 0.5;
+}
+.org-row .review-flags {
+  margin-top: 6px;
+}
+.org-title {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  width: 100%;
+  text-align: left;
+  min-height: 44px;
+}
+.org-title .num {
+  width: 28px;
+  flex: none;
+  color: var(--text-2);
+  font-variant-numeric: tabular-nums;
+}
+.org-title .t {
+  flex: 1;
+  display: grid;
+}
+.org-title small {
+  color: var(--text-2);
+  font-size: 12.5px;
+}
+.org-title .dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+.org-title .dot.low {
+  background: var(--danger);
+}
+.org-sample p {
+  font-family: var(--serif);
+  font-size: 15px;
+  line-height: 1.5;
+  margin: 8px 0;
+}
+.org-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+.review-actions {
+  position: sticky;
+  bottom: calc(var(--safe-bottom) + var(--tabbar-h) + 8px);
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 16px;
+  padding: 10px;
+  border-radius: 16px;
+  background: var(--surface-3);
+  box-shadow: var(--shadow);
+}
+.review-actions .btn-primary {
+  flex: 1;
+}
+.split-list {
+  list-style: none;
+  padding: 0;
+  margin: 10px 0 0;
+  display: grid;
+  gap: 4px;
+}
+.split-list .list-row {
+  text-align: left;
+  width: 100%;
+  font-size: 14px;
+}
+.import-review {
+  padding-bottom: calc(var(--safe-bottom) + var(--tabbar-h) + 96px);
+}

@@ -12,7 +12,9 @@ test.beforeEach(async ({ page }) => {
 
 async function addBook(page: Page, name = 'Field Notes') {
   await page.goto('./');
-  await page.getByTestId('file-input').setInputFiles({ name: `${name}.txt`, mimeType: 'text/plain', buffer: Buffer.from(BOOK) });
+  // Each test book has its own content (the same file twice is caught as a duplicate).
+  const text = name === 'Field Notes' ? BOOK : `${BOOK}\n\nA note about ${name}.`;
+  await page.getByTestId('file-input').setInputFiles({ name: `${name}.txt`, mimeType: 'text/plain', buffer: Buffer.from(text) });
   await page.getByRole('button', { name: 'Save to library' }).click();
 }
 

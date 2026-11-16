@@ -1,5 +1,5 @@
 import JSZip from 'jszip';
-import type { Chapter, ImportedBook } from '../types';
+import type { Chapter, ImportSignals, ImportedBook } from '../types';
 import { ImportError } from './errors';
 import { finalizeChapters, titleFromFileName } from './text';
 
@@ -9,8 +9,18 @@ const BLOCK_TAGS = new Set([
 ]);
 const SKIP_TAGS = new Set(['script', 'style', 'head', 'title', 'svg', 'math', 'noscript', 'rt', 'rp']);
 
-/** Extracts readable text from an (X)HTML document, keeping paragraph breaks. */
-export function htmlToText(root: Node): string {
+const NOTE_TYPES = /\b(footnote|endnote|rearnote|note|footnotes|endnotes|rearnotes)\b/;
+/** Marks where a table-of-contents entry starts inside a file (see importEpub). */
+export const SPLIT_MARK = '\u2063SPLIT';
+
+/** epub:type of an element (also the plain `type`/`role` some books use). */
+const epubType = (el: Element) => `${el.getAttribute('epub:type') ?? el.getAttributeNS?.('http://www.idpf.org/2007/ops', 'type') ?? ''} ${el.getAttribute('role') ?? ''}`.toLowerCase();
+
+/**
+ * Extracts readable text from an (X)HTML document, keeping paragraph breaks. Footnotes and endnotes
+ * (epub:type footnote/endnote/note, role doc-footnote/doc-endnote) are collected into `notes` instead of the text.
+ */
+export function htmlToText(root: Node, notes?: string[]): string {
   const out: string[] = [];
   const walk = (node: Node) => {
     if (node.nodeType === 3) {
@@ -20,6 +30,16 @@ export function htmlToText(root: Node): string {
     if (node.nodeType !== 1) return;
     const tag = (node as Element).localName?.toLowerCase() ?? '';
     if (SKIP_TAGS.has(tag)) return;
+    const split = (node as Element).getAttribute?.('data-split');
+    if (split != null) out.push(`\n\n${SPLIT_MARK}${split}\n\n`);
+    const type = epubType(node as Element);
+    if (notes && (NOTE_TYPES.test(type) || /doc-(foot|end)note/.test(type)) && !/noteref/.test(type)) {
+      const t = htmlToText(node);
+      if (t) notes.push(t);
+      return;
+    }
+    // Links to notes ("¹", "[3]") are noise when read aloud.
+    if (tag === 'a' && /noteref/.test(type)) return;
     // Footnote reference markers ("[12]") are noise when read aloud.
     if (tag === 'sup' && /^\s*\[?\d+\]?\s*$/.test(node.textContent ?? '')) return;
     const block = BLOCK_TAGS.has(tag);
@@ -60,8 +80,19 @@ function resolvePath(base: string, href: string): string {
   return parts.join('/');
 }
 
-async function readTocTitles(zip: JSZip, opfPath: string, manifest: Map<string, { href: string; type: string; props: string }>, tocId: string | null) {
-  const titles = new Map<string, string>();
+interface TocEntry {
+  path: string;
+  anchor: string | null;
+  label: string;
+}
+
+/** The table of contents in its listed order (EPUB 3 nav, else EPUB 2 NCX), with each entry's file and anchor. */
+async function readToc(zip: JSZip, opfPath: string, manifest: Map<string, { href: string; type: string; props: string }>, tocId: string | null): Promise<TocEntry[]> {
+  const entries: TocEntry[] = [];
+  const add = (base: string, href: string, label: string) => {
+    const anchor = href.includes('#') ? decodeURIComponent(href.split('#')[1]) : null;
+    entries.push({ path: resolvePath(base, href), anchor: anchor || null, label });
+  };
   const navItem = [...manifest.values()].find((m) => m.props.split(/\s+/).includes('nav'));
   const ncxItem = (tocId && manifest.get(tocId)) || [...manifest.values()].find((m) => m.type === 'application/x-dtbncx+xml');
   if (navItem) {
@@ -74,14 +105,11 @@ async function readTocTitles(zip: JSZip, opfPath: string, manifest: Map<string, 
       for (const a of toc ? byLocalName(toc, 'a') : []) {
         const href = a.getAttribute('href');
         const label = a.textContent?.replace(/\s+/g, ' ').trim();
-        if (href && label) {
-          const key = resolvePath(path, href);
-          if (!titles.has(key)) titles.set(key, label);
-        }
+        if (href && label) add(path, href, label);
       }
     }
   }
-  if (!titles.size && ncxItem) {
+  if (!entries.length && ncxItem) {
     const path = resolvePath(opfPath, ncxItem.href);
     const xml = await zip.file(path)?.async('string');
     if (xml) {
@@ -89,14 +117,11 @@ async function readTocTitles(zip: JSZip, opfPath: string, manifest: Map<string, 
       for (const np of byLocalName(doc, 'navPoint')) {
         const label = byLocalName(np, 'text')[0]?.textContent?.replace(/\s+/g, ' ').trim();
         const src = byLocalName(np, 'content')[0]?.getAttribute('src');
-        if (label && src) {
-          const key = resolvePath(path, src);
-          if (!titles.has(key)) titles.set(key, label);
-        }
+        if (label && src) add(path, src, label);
       }
     }
   }
-  return titles;
+  return entries;
 }
 
 async function readCover(zip: JSZip, opfPath: string, opf: Document, manifest: Map<string, { href: string; type: string; props: string }>) {
@@ -147,30 +172,99 @@ export async function importEpub(file: Blob, fileName: string): Promise<Imported
 
   const title = byLocalName(opf, 'title')[0]?.textContent?.trim() || titleFromFileName(fileName);
   const author = byLocalName(opf, 'creator').map((c) => c.textContent?.trim()).filter(Boolean).join(', ');
-  const tocTitles = await readTocTitles(zip, opfPath, manifest, spineEl?.getAttribute('toc') ?? null);
+  const language = byLocalName(opf, 'language')[0]?.textContent?.trim() || undefined;
+  const toc = await readToc(zip, opfPath, manifest, spineEl?.getAttribute('toc') ?? null);
+  const spinePaths = spine.map((item) => resolvePath(opfPath, item.href));
+  const extraItems = byLocalName(opf, 'itemref')
+    .filter((r) => r.getAttribute('linear') === 'no')
+    .map((r) => manifest.get(r.getAttribute('idref') ?? ''))
+    .filter((m): m is { href: string; type: string; props: string } => !!m);
 
   const chapters: Chapter[] = [];
-  for (const item of spine) {
-    const path = resolvePath(opfPath, item.href);
+  const notes: string[] = [];
+  const extras: string[] = [];
+  /** Text of one book file, split where table-of-contents entries start inside it. */
+  const readDoc = async (item: { href: string; type: string }, path: string) => {
     const html = await zip.file(path)?.async('string');
-    if (!html) continue;
+    if (!html) return null;
     const isXhtml = /xhtml|xml/.test(item.type);
     const doc = parseXml(html, isXhtml ? 'application/xhtml+xml' : 'text/html');
     const body = doc.getElementsByTagName('body')[0] ?? doc.documentElement;
-    const text = htmlToText(body);
-    if (text.replace(/\s/g, '').length < 2) continue;
-    const heading = byLocalName(body as Element, 'h1')[0] ?? byLocalName(body as Element, 'h2')[0];
-    const chTitle =
-      tocTitles.get(path) ?? heading?.textContent?.replace(/\s+/g, ' ').trim() ?? `Section ${chapters.length + 1}`;
-    // Tiny untitled fragments (e.g. a split page) are merged into the previous chapter.
-    if (!tocTitles.has(path) && !heading && text.length < 400 && chapters.length) {
-      chapters[chapters.length - 1].text += `\n\n${text}`;
-      continue;
+    const anchors = toc.filter((t) => t.path === path && t.anchor);
+    const unfound: TocEntry[] = [];
+    for (const [i, t] of anchors.entries()) {
+      const el = doc.getElementById(t.anchor!) ?? byLocalName(body as Element, '*').find((e) => e.getAttribute('id') === t.anchor || e.getAttribute('name') === t.anchor);
+      if (el) el.setAttribute('data-split', String(i));
+      else unfound.push(t);
     }
-    chapters.push({ title: chTitle, text });
+    const fileNotes: string[] = [];
+    const text = htmlToText(body, fileNotes);
+    notes.push(...fileNotes);
+    // Pieces: [text before the first anchor, then one piece per anchor found].
+    const pieces: Array<{ entry: TocEntry | null; text: string }> = [];
+    let current: { entry: TocEntry | null; parts: string[] } = { entry: null, parts: [] };
+    for (const para of text.split(/\n\n+/)) {
+      if (para.startsWith(SPLIT_MARK)) {
+        pieces.push({ entry: current.entry, text: current.parts.join('\n\n') });
+        current = { entry: anchors[Number(para.slice(SPLIT_MARK.length))] ?? null, parts: [] };
+      } else current.parts.push(para);
+    }
+    pieces.push({ entry: current.entry, text: current.parts.join('\n\n') });
+    const heading = byLocalName(body as Element, 'h1')[0] ?? byLocalName(body as Element, 'h2')[0];
+    // An entry whose anchor isn't in the file names the file as a whole.
+    return { pieces, heading: heading?.textContent?.replace(/\s+/g, ' ').trim(), fileEntry: unfound[0] ?? null };
+  };
+
+  for (let si = 0; si < spine.length; si++) {
+    const item = spine[si];
+    const path = spinePaths[si];
+    const read = await readDoc(item, path);
+    if (!read) continue;
+    const fileEntry = toc.find((t) => t.path === path && !t.anchor) ?? read.fileEntry;
+    read.pieces.forEach((piece, pi) => {
+      const text = piece.text;
+      if (text.replace(/\s/g, '').length < 2) return;
+      const entry = piece.entry ?? (pi === 0 ? fileEntry : null) ?? null;
+      const chTitle = entry?.label ?? (pi === 0 ? read.heading : undefined) ?? `Section ${chapters.length + 1}`;
+      // Tiny untitled fragments (e.g. a split page) are merged into the previous chapter.
+      if (!entry && !(pi === 0 && read.heading) && text.length < 400 && chapters.length) {
+        chapters[chapters.length - 1].text += `\n\n${text}`;
+        return;
+      }
+      chapters.push({ title: chTitle, text });
+    });
+  }
+  // Sections outside the reading order (often notes or extras) are kept at the end instead of being dropped.
+  for (const item of extraItems) {
+    const path = resolvePath(opfPath, item.href);
+    const read = await readDoc(item, path);
+    const text = read?.pieces.map((p) => p.text).filter(Boolean).join('\n\n') ?? '';
+    if (text.replace(/\s/g, '').length < 200) continue;
+    const label = toc.find((t) => t.path === path)?.label ?? read?.heading ?? 'Extra';
+    extras.push(label);
+    chapters.push({ title: label, text });
   }
   if (!chapters.length) throw new ImportError('No readable text was found in this EPUB.', 'empty');
+  if (notes.length) chapters.push({ title: 'Notes', text: notes.join('\n\n'), kind: 'notes' });
+
+  // Compare the table of contents with the reading order.
+  const position = (t: TocEntry) => spinePaths.indexOf(t.path);
+  const tocMissing = toc.filter((t) => position(t) < 0 && !extraItems.some((x) => resolvePath(opfPath, x.href) === t.path)).map((t) => t.label);
+  const placed = toc.filter((t) => position(t) >= 0);
+  const tocOutOfOrder: string[] = [];
+  let maxPos = -1;
+  for (const t of placed) {
+    const p = position(t);
+    if (p < maxPos) tocOutOfOrder.push(t.label);
+    maxPos = Math.max(maxPos, p);
+  }
+  const signals: ImportSignals = {
+    structure: toc.length ? 'toc' : 'spine',
+    ...(tocOutOfOrder.length ? { tocOutOfOrder } : {}),
+    ...(tocMissing.length ? { tocMissing } : {}),
+    ...(extras.length ? { extras } : {}),
+  };
 
   const cover = await readCover(zip, opfPath, opf, manifest).catch(() => null);
-  return { title, author, format: 'epub', cover, chapters: finalizeChapters(chapters) };
+  return { title, author, format: 'epub', cover, chapters: finalizeChapters(chapters), language, signals };
 }

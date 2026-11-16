@@ -15,6 +15,7 @@ export function tabFor(route: Route): (typeof TABS)[number]['id'] | null {
     case 'settings':
       return 'home';
     case 'library':
+    case 'review':
       return 'library';
     case 'discover':
     case 'club':

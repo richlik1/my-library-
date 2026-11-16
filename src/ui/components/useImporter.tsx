@@ -1,7 +1,8 @@
-import { useCallback, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { ImportError, importFile } from '../../core/importers';
 import { parseTxt } from '../../core/importers/txt';
-import { requestPersistentStorage, saveImportedBook } from '../../core/storage/db';
+import { fileHash, findBookByFileHash, requestPersistentStorage, saveImportedBook } from '../../core/storage/db';
+import { navigate } from '../hooks/useRoute';
 import type { Book } from '../../core/types';
 import { useSettings } from '../hooks/settings';
 import { useToast } from '../hooks/toast';
@@ -20,6 +21,16 @@ interface Failure {
 /** Originals above this size aren't kept (text is still saved) to spare phone memory and storage. */
 const KEEP_ORIGINAL_MAX = 30 * 1024 * 1024;
 
+const PENDING_KEY = 'ml-import-pending';
+const setPending = (v: { name: string; size: number } | null) => {
+  try {
+    if (v) localStorage.setItem(PENDING_KEY, JSON.stringify({ ...v, at: Date.now() }));
+    else localStorage.removeItem(PENDING_KEY);
+  } catch {
+    /* private mode */
+  }
+};
+
 /** File picker + extraction progress + error explanations for importing books. */
 export function useImporter(onImported: (books: Book[], openDetails: boolean) => void) {
   const inputRef = useRef<HTMLInputElement>(null);
@@ -27,36 +38,64 @@ export function useImporter(onImported: (books: Book[], openDetails: boolean) =>
   const toast = useToast();
   const [busy, setBusy] = useState<{ name: string; index: number; total: number; fraction: number; label: string } | null>(null);
   const [failures, setFailures] = useState<Failure[]>([]);
+  const [duplicates, setDuplicates] = useState<Array<{ file: File; book: Book }>>([]);
+
+  // An import that was interrupted (the app closed or crashed while reading a file) is reported once.
+  useEffect(() => {
+    try {
+      const pending = JSON.parse(localStorage.getItem(PENDING_KEY) ?? 'null') as { name: string } | null;
+      if (pending?.name) {
+        setPending(null);
+        toast(`Importing “${pending.name}” didn’t finish last time. Choose the file again to try again.`, { ms: 12_000 });
+      }
+    } catch {
+      /* ignore */
+    }
+  }, [toast]);
 
   const run = useCallback(
-    async (files: File[]) => {
+    async (files: File[], opts: { allowDuplicates?: boolean } = {}) => {
       if (!files.length) return;
       requestPersistentStorage();
       const added: Book[] = [];
       const failed: Failure[] = [];
+      const dupes: Array<{ file: File; book: Book }> = [];
       const category = settings.categories.includes('Other') ? 'Other' : settings.categories[0] ?? 'Other';
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
         setBusy({ name: file.name, index: i, total: files.length, fraction: 0, label: 'Opening…' });
         let stage = 'reading the file';
         try {
+          // The same file imported before: ask instead of making a second copy.
+          const hash = await fileHash(file).catch(() => undefined);
+          if (hash && !opts.allowDuplicates) {
+            const existing = await findBookByFileHash(hash);
+            if (existing) {
+              dupes.push({ file, book: existing });
+              continue;
+            }
+          }
+          setPending({ name: file.name, size: file.size });
           const imported = await importFile(file, (fraction, label) => {
             stage = label;
             setBusy((b) => (b ? { ...b, fraction, label } : b));
           });
           stage = 'saving to your library';
           setBusy((b) => (b ? { ...b, fraction: 1, label: 'Saving to your library…' } : b));
-          const fileInfo = { name: file.name, size: file.size, type: file.type, data: file };
+          const fileInfo = { name: file.name, size: file.size, type: file.type, data: file, hash };
           let book: Book;
+          // Saved straight away (nothing is lost if the app closes now); the quality review stays open until confirmed.
           try {
-            book = await saveImportedBook(imported, fileInfo, category, file.size <= KEEP_ORIGINAL_MAX);
+            book = await saveImportedBook(imported, fileInfo, category, file.size <= KEEP_ORIGINAL_MAX, { needsReview: true });
           } catch (saveError) {
             // Some iPhones can't store large files in browser storage. The text is what matters, so save without the original.
             console.warn('Saving the original file failed; saving the text only', saveError);
-            book = await saveImportedBook(imported, fileInfo, category, false);
+            book = await saveImportedBook(imported, fileInfo, category, false, { needsReview: true });
           }
+          setPending(null);
           added.push(book);
         } catch (e) {
+          setPending(null);
           console.error(e);
           const err = e as Error;
           const quota = err?.name === 'QuotaExceededError';
@@ -75,6 +114,7 @@ export function useImporter(onImported: (books: Book[], openDetails: boolean) =>
       }
       setBusy(null);
       if (failed.length) setFailures(failed);
+      if (dupes.length) setDuplicates(dupes);
       if (added.length) {
         if (added.length > 1) toast(`Added ${added.length} books to your library`);
         onImported(added, added.length === 1 && !failed.length);
@@ -162,6 +202,37 @@ export function useImporter(onImported: (books: Book[], openDetails: boolean) =>
           <button className="btn btn-primary btn-block" disabled={!pasteText.trim()} onClick={savePasted}>
             Save to library
           </button>
+        </Sheet>
+      )}
+      {duplicates.length > 0 && (
+        <Sheet title="Already in your library" onClose={() => setDuplicates([])}>
+          {duplicates.map(({ file, book }) => (
+            <div key={book.id} className="card" style={{ marginBottom: 10 }}>
+              <p style={{ marginTop: 0 }}>
+                <strong>{file.name}</strong> was imported before as “{book.title}”.
+              </p>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                <button
+                  className="btn btn-primary"
+                  onClick={() => {
+                    setDuplicates([]);
+                    navigate(`/book/${book.id}`);
+                  }}
+                >
+                  Open it
+                </button>
+                <button
+                  className="btn"
+                  onClick={() => {
+                    setDuplicates((d) => d.filter((x) => x.file !== file));
+                    void run([file], { allowDuplicates: true });
+                  }}
+                >
+                  Import a copy
+                </button>
+              </div>
+            </div>
+          ))}
         </Sheet>
       )}
       {failures.length > 0 && (

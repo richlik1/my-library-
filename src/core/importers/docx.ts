@@ -110,5 +110,26 @@ export async function importDocx(file: Blob, fileName: string): Promise<Imported
   } else {
     chapters = detectChapters(paras.map((p) => p.text).join('\n\n'), title);
   }
-  return { title, author, format: 'docx', cover: null, chapters: finalizeChapters(chapters) };
+  // Footnotes and endnotes live in their own parts of the file: keep them as a Notes section.
+  const notes: string[] = [];
+  for (const part of ['word/footnotes.xml', 'word/endnotes.xml']) {
+    const xml = await zip.file(part)?.async('string');
+    if (!xml) continue;
+    const doc = parser.parseFromString(xml, 'application/xml');
+    for (const note of [...descendants(doc, 'footnote'), ...descendants(doc, 'endnote')]) {
+      // Ids -1 and 0 are Word's separator notes.
+      if (Number(note.getAttribute('w:id') ?? note.getAttribute('id') ?? 1) <= 0) continue;
+      const text = descendants(note, 't').map((t) => t.textContent ?? '').join('').replace(/\s+/g, ' ').trim();
+      if (text) notes.push(text);
+    }
+  }
+  if (notes.length) chapters.push({ title: 'Notes', text: notes.join('\n\n'), kind: 'notes' });
+  return {
+    title,
+    author,
+    format: 'docx',
+    cover: null,
+    chapters: finalizeChapters(chapters),
+    signals: { structure: splitLevel || chapters.filter((c) => c.kind !== 'notes').length > 1 ? 'headings' : 'single' },
+  };
 }

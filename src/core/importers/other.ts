@@ -11,7 +11,8 @@ export async function importHtml(file: Blob, fileName: string): Promise<Imported
   const author = doc.querySelector('meta[name="author"]')?.getAttribute('content')?.trim() ?? '';
   const text = htmlToText(doc.body ?? doc.documentElement);
   if (text.replace(/\s/g, '').length < 2) throw new ImportError('No readable text was found in this web page.', 'empty');
-  return { title, author, format: 'txt', cover: null, chapters: finalizeChapters(detectChapters(text, title)) };
+  const chapters = detectChapters(text, title);
+  return { title, author, format: 'txt', cover: null, chapters: finalizeChapters(chapters), signals: { structure: chapters.length > 1 ? 'headings' : 'single' } };
 }
 
 /** Converts Rich Text Format to plain text (enough for reading aloud). */
@@ -71,7 +72,8 @@ export async function importRtf(file: Blob, fileName: string): Promise<ImportedB
   const text = rtfToText(raw);
   if (text.replace(/\s/g, '').length < 2) throw new ImportError('No readable text was found in this RTF document.', 'empty');
   const title = titleFromFileName(fileName);
-  return { title, author: '', format: 'txt', cover: null, chapters: finalizeChapters(detectChapters(text, title)) };
+  const chapters = detectChapters(text, title);
+  return { title, author: '', format: 'txt', cover: null, chapters: finalizeChapters(chapters), signals: { structure: chapters.length > 1 ? 'headings' : 'single' } };
 }
 
 /** True when the bytes look like human-readable text (any extension). */

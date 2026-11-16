@@ -1,5 +1,7 @@
-import { useRef, useState } from 'react';
-import { deleteBook, updateBook } from '../../core/storage/db';
+import { useEffect, useRef, useState } from 'react';
+import { buildImportReport, type ImportReport } from '../../core/importers/report';
+import { deleteBook, getContent, updateBook } from '../../core/storage/db';
+import { navigate } from '../hooks/useRoute';
 import type { Book } from '../../core/types';
 import { useSettings } from '../hooks/settings';
 import { useToast } from '../hooks/toast';
@@ -29,18 +31,24 @@ export function BookDetailsSheet({
   const [cover, setCover] = useState(book.cover);
   const [favorite, setFavorite] = useState(!!book.favorite);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  // Import quality summary, with a way into the Chapter Organizer.
+  const [report, setReport] = useState<ImportReport | null>(null);
+  useEffect(() => {
+    void getContent(book.id).then((c) => c && setReport(buildImportReport({ chapters: c.chapters, ocr: book.ocr, signals: book.signals })));
+  }, [book.id, book.ocr, book.signals]);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const categories = settings.categories.includes(category) || !category ? settings.categories : [...settings.categories, category];
 
-  const save = async () => {
+  const save = async (close = true) => {
     let cat = category;
     const extra = newCategory.trim();
     if (category === '__new' && extra) {
       cat = extra;
       if (!settings.categories.includes(extra)) update({ categories: [...settings.categories, extra] });
     } else if (category === '__new') cat = 'Other';
-    const next = await updateBook(book.id, { title: title.trim() || book.title, author: author.trim(), category: cat, cover, favorite });
+    // Saving a just-imported book accepts the import as it is (it can still be checked later).
+    const next = await updateBook(book.id, { title: title.trim() || book.title, author: author.trim(), category: cat, cover, favorite, ...(isNew && close ? { needsReview: false } : {}) });
     if (next) onSaved(next);
     onClose();
   };
@@ -65,6 +73,31 @@ export function BookDetailsSheet({
             tool (e.g. iPhone Live Text or OCRmyPDF) and import it again to hear those pages.
           </div>
         </div>
+      )}
+      {report && (
+        <section className="card review-mini" aria-label="Contents check">
+          <div className="review-stats">
+            <span className={`badge-conf ${report.confidence === 'high' ? 'ok' : report.confidence === 'check' ? 'check' : 'bad'}`}>
+              {report.confidence === 'high' ? 'Looks right' : report.confidence === 'check' ? 'Worth a check' : 'Problems found'}
+            </span>
+            <span className="small">
+              {report.chapters.length} chapters · {report.words.toLocaleString()} words
+            </span>
+          </div>
+          <p className="small muted" style={{ margin: '8px 0' }}>
+            {report.order.explanation}
+          </p>
+          <button
+            className="btn"
+            style={{ width: '100%' }}
+            onClick={async () => {
+              await save(false);
+              navigate(`/review/${book.id}`);
+            }}
+          >
+            Check chapters and order
+          </button>
+        </section>
       )}
       <div className="cover-edit">
         <Cover book={{ ...book, title, author, cover }} />
@@ -132,7 +165,7 @@ export function BookDetailsSheet({
         {listeningHours(book.charCount)} of listening
       </p>
       <div style={{ display: 'grid', gap: 10, marginTop: 12 }}>
-        <button className="btn btn-primary btn-block" onClick={save}>
+        <button className="btn btn-primary btn-block" onClick={() => save()}>
           {isNew ? 'Save to library' : 'Save changes'}
         </button>
         {!confirmDelete ? (

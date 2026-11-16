@@ -9,6 +9,26 @@ export interface Chapter {
   title: string;
   /** Clean plain text. Paragraphs are separated by a blank line ("\n\n"). */
   text: string;
+  /** PDF only: where each source page starts in `text` (character offset → 1-based page), ascending. */
+  pages?: Array<{ offset: number; page: number }>;
+  /** Notes, footnotes or endnotes gathered from the book (kept, but not part of the main text). */
+  kind?: 'notes';
+}
+
+/** What an importer saw, so the import can be checked against the source (see importers/report.ts). */
+export interface ImportSignals {
+  /** Where the chapter list came from. */
+  structure: 'outline' | 'toc' | 'headings' | 'pages' | 'spine' | 'single';
+  /** PDF: total pages; pages with no text and no image; printed page numbers found in headers/footers. */
+  pages?: number;
+  blankPages?: number[];
+  printedPageNumbers?: Array<{ page: number; printed: number }>;
+  /** EPUB: table-of-contents entries whose order differs from the reading order (spine). */
+  tocOutOfOrder?: string[];
+  /** EPUB: table-of-contents entries that point to nothing in the book. */
+  tocMissing?: string[];
+  /** Sections not in the reading order (EPUB `linear="no"`) that were added at the end. */
+  extras?: string[];
 }
 
 export interface OcrReport {
@@ -37,6 +57,14 @@ export interface Book {
   favorite?: boolean;
   /** How this book is narrated: live device speech, or generated natural-voice audio. */
   narration?: { engine: NarrationEngine; voice?: string; pause?: PauseLength; presetId?: string };
+  /** Language of the text, when the file says. */
+  language?: string;
+  /** SHA-256 of the imported file, to recognise the same file imported again. */
+  fileHash?: string;
+  /** The import quality review hasn't been confirmed yet (shown again until it is). */
+  needsReview?: boolean;
+  /** What the importer saw, for the quality review. */
+  signals?: ImportSignals;
 }
 
 export interface BookContent {
@@ -190,4 +218,7 @@ export interface ImportedBook {
   chapters: Chapter[];
   cover: string | null;
   ocr?: OcrReport;
+  /** BCP 47 language, when the file says (e.g. "en", "fr"). */
+  language?: string;
+  signals?: ImportSignals;
 }

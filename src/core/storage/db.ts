@@ -1,6 +1,7 @@
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
 import { newId } from '../id';
 import type { Annotation, Book, BookContent, Chapter, ImportedBook, Progress, Settings, StoredFile } from '../types';
+import { build as buildOrganized, mapPosition, type OrganizedChapter } from '../organizer';
 import { DEFAULT_SETTINGS } from '../types';
 import type { DailyBlock, GrowthBookState, GrowthNote, WeeklyReview } from '../../growth/types';
 import type { ChapterAudio } from '../audio/types';
@@ -98,9 +99,10 @@ export async function getBook(id: string) {
 
 export async function saveImportedBook(
   imported: ImportedBook,
-  file: { name: string; size: number; type: string; data: Blob },
+  file: { name: string; size: number; type: string; data: Blob; hash?: string },
   category: string,
   keepOriginal = true,
+  opts: { needsReview?: boolean } = {},
 ): Promise<Book> {
   const id = newId();
   const book: Book = {
@@ -117,6 +119,10 @@ export async function saveImportedBook(
     chapterCount: imported.chapters.length,
     charCount: imported.chapters.reduce((s, c) => s + c.text.length, 0),
     ...(imported.ocr ? { ocr: imported.ocr } : {}),
+    ...(imported.language ? { language: imported.language } : {}),
+    ...(imported.signals ? { signals: imported.signals } : {}),
+    ...(file.hash ? { fileHash: file.hash } : {}),
+    ...(opts.needsReview ? { needsReview: true } : {}),
   };
   // Read the bytes before opening the transaction (it would auto-commit while we wait).
   const bytes = keepOriginal ? await file.data.arrayBuffer() : null;
@@ -127,6 +133,17 @@ export async function saveImportedBook(
   if (bytes) await tx.objectStore('files').put({ bookId: id, name: file.name, type: file.type, data: bytes });
   await tx.done;
   return book;
+}
+
+/** A book already imported from the same file (same SHA-256), if any. */
+export async function findBookByFileHash(hash: string): Promise<Book | undefined> {
+  return (await (await db()).getAll('books')).find((b) => b.fileHash === hash);
+}
+
+/** SHA-256 of a file, hex. */
+export async function fileHash(data: Blob): Promise<string> {
+  const digest = await crypto.subtle.digest('SHA-256', await data.arrayBuffer());
+  return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, '0')).join('');
 }
 
 export async function updateBook(id: string, patch: Partial<Omit<Book, 'id'>>): Promise<Book | undefined> {
@@ -189,6 +206,49 @@ export async function updateChapterText(bookId: string, index: number, title: st
   }
   await tx.done;
   return { chapters, moved, unmatched };
+}
+
+/**
+ * Applies the Chapter Organizer to a saved book: new chapter list, with the reading position, highlights, notes and
+ * bookmarks moved to where their text now is. Audio made for the old chapters is deleted (chapter numbers changed),
+ * unless only titles changed. The original file is never touched.
+ */
+export async function reorganizeBook(bookId: string, list: OrganizedChapter[]): Promise<{ chapters: Chapter[]; audioCleared: boolean }> {
+  const d = await db();
+  const content = await d.get('contents', bookId);
+  if (!content) throw new Error('Book not found');
+  const original = content.chapters;
+  const chapters = buildOrganized(list, original);
+  if (!chapters.length) throw new Error('A book needs at least one chapter');
+  const sameText = chapters.length === original.length && chapters.every((c, i) => c.text === original[i].text);
+  const tx = d.transaction(['contents', 'books', 'annotations', 'progress', 'audio', 'audioData'], 'readwrite');
+  await tx.objectStore('contents').put({ ...content, chapters });
+  const book = await tx.objectStore('books').get(bookId);
+  if (book)
+    await tx.objectStore('books').put({ ...book, chapterCount: chapters.length, charCount: chapters.reduce((n, c) => n + c.text.length, 0), needsReview: false });
+  if (!sameText) {
+    for (const a of await tx.objectStore('annotations').index('byBook').getAll(bookId)) {
+      const start = mapPosition(list, { chapter: a.chapter, offset: a.start });
+      if (!start) continue;
+      const len = a.end - a.start;
+      const text = chapters[start.chapter].text;
+      // Keep the quote attached to its words when they moved; otherwise keep the note at the mapped place.
+      const end = text.slice(start.offset, start.offset + len) === a.quote ? start.offset + len : Math.min(text.length, start.offset + Math.max(1, len));
+      await tx.objectStore('annotations').put({ ...a, chapter: start.chapter, start: start.offset, end });
+    }
+    const progress = await tx.objectStore('progress').get(bookId);
+    if (progress) {
+      const at = mapPosition(list, { chapter: progress.chapter, offset: progress.offset });
+      if (at) await tx.objectStore('progress').put({ ...progress, chapter: at.chapter, offset: at.offset });
+    }
+    const audioKeys = await tx.objectStore('audio').index('byBook').getAllKeys(bookId);
+    for (const key of audioKeys) {
+      await tx.objectStore('audio').delete(key);
+      await tx.objectStore('audioData').delete(key);
+    }
+  }
+  await tx.done;
+  return { chapters, audioCleared: !sameText };
 }
 
 /** The original file, always returned as a Blob. */

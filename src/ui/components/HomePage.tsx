@@ -218,6 +218,27 @@ export function HomePage() {
             </section>
           )}
 
+          {books.some((b) => b.needsReview) && (
+            <section aria-labelledby="check-h" className="card">
+              <h2 className="h-small" id="check-h">
+                Check your new books
+              </h2>
+              <p className="small muted" style={{ margin: '2px 0 10px' }}>
+                See the chapters that were found, any problems, and fix the order if needed.
+              </p>
+              <div style={{ display: 'grid', gap: 6 }}>
+                {books
+                  .filter((b) => b.needsReview)
+                  .slice(0, 5)
+                  .map((b) => (
+                    <button key={b.id} className="list-row" style={{ textAlign: 'left' }} onClick={() => navigate(`/review/${b.id}`)}>
+                      Check “{b.title}”
+                    </button>
+                  ))}
+              </div>
+            </section>
+          )}
+
           <VoiceSetupCard />
 
           {settings.habits && habits && <GoalCard habits={habits} goal={settings.dailyGoalMinutes} showStreak={settings.streaks} />}
