@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { aiAnswerAvailability, indexFor, terms, type SearchHit } from '../../core/search';
 import { saveAnnotation } from '../../core/storage/db';
 import type { Annotation, Book, Chapter, Position } from '../../core/types';
+import { placeLabel } from '../../core/types';
 import { useToast } from '../hooks/toast';
 import { Icon } from './Icon';
 import { Sheet } from './Sheet';
@@ -66,7 +67,7 @@ export function AskSheet({
 
   const Hit = ({ h, query }: { h: SearchHit | { chapter: number; start: number; text: string; chapterTitle?: string }; query: string }) => (
     <li className="hit">
-      <div className="hit-ref">{h.chapterTitle ?? chapters[h.chapter]?.title}</div>
+      <div className="hit-ref">{h.chapterTitle ?? placeLabel(chapters[h.chapter], h.chapter, h.start)}</div>
       <p className="hit-text">
         <Marked text={h.text.length > 420 ? `${h.text.slice(0, 420)}…` : h.text} query={query} />
       </p>

@@ -33,7 +33,7 @@ export async function detectFormat(file: Blob, name: string): Promise<DetectedFo
   return null;
 }
 
-export async function importFile(file: File, onProgress?: ProgressFn): Promise<ImportedBook> {
+export async function importFile(file: File, onProgress?: ProgressFn, opts: { ocr?: boolean } = {}): Promise<ImportedBook> {
   const format = await detectFormat(file, file.name);
   if (file.size === 0) throw new ImportError('This file is empty.', 'empty');
   switch (format) {
@@ -41,7 +41,9 @@ export async function importFile(file: File, onProgress?: ProgressFn): Promise<I
       // PDF.js is large, so it is loaded only when a PDF is imported.
       const [{ loadPdfjs, pdfDocOptions, useMainThreadWorker }, { importPdf }] = await Promise.all([import('./pdfjs-browser'), import('./pdf')]);
       const data = await file.arrayBuffer();
-      const run = async () => importPdf(await loadPdfjs(), data.slice(0), file.name, { onProgress, docOptions: pdfDocOptions() });
+      // Scanned pages are read with OCR only when asked (it downloads the OCR engine once and is slow).
+      const ocrPage = opts.ocr ? (await import('./ocr')).ocrPdfPage : undefined;
+      const run = async () => importPdf(await loadPdfjs(), data.slice(0), file.name, { onProgress, docOptions: pdfDocOptions(), ocrPage });
       try {
         return await run();
       } catch (e) {

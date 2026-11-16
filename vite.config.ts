@@ -39,7 +39,7 @@ export default defineConfig({
         // Precache the whole app shell (including the PDF.js worker) so the
         // app opens and can import books with no network at all.
         globPatterns: ['**/*.{js,mjs,css,html,png,svg,ico,webmanifest,pdf}'],
-        globIgnores: ['pdfjs/**', 'ort/**'],
+        globIgnores: ['pdfjs/**', 'ort/**', 'ocr/**'],
         maximumFileSizeToCacheInBytes: 8 * 1024 * 1024,
       },
     }),

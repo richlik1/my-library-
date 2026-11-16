@@ -34,3 +34,20 @@ try {
 } catch {
   console.log('[copy-pdfjs-assets] @huggingface/transformers not installed yet, skipping ONNX Runtime files');
 }
+
+// OCR (Tesseract.js, Apache-2.0) for scanned PDF pages: engine and English data served from the app itself,
+// so pages are read on the device and nothing is fetched from a CDN.
+try {
+  const core = dirname(require.resolve('tesseract.js-core/package.json'));
+  const tess = join(dirname(require.resolve('tesseract.js/package.json')), 'dist');
+  const data = dirname(require.resolve('@tesseract.js-data/eng/package.json'));
+  const out = join(process.cwd(), 'public', 'ocr');
+  mkdirSync(join(out, 'lang'), { recursive: true });
+  cpSync(join(tess, 'worker.min.js'), join(out, 'worker.min.js'));
+  for (const v of ['tesseract-core-simd-lstm', 'tesseract-core-lstm', 'tesseract-core-relaxedsimd-lstm'])
+    for (const ext of ['.js', '.wasm', '.wasm.js']) cpSync(join(core, v + ext), join(out, v + ext));
+  cpSync(join(data, '4.0.0_best_int', 'eng.traineddata.gz'), join(out, 'lang', 'eng.traineddata.gz'));
+  console.log('[copy-pdfjs-assets] copied OCR engine and English data to public/ocr');
+} catch {
+  console.log('[copy-pdfjs-assets] tesseract.js not installed yet, skipping OCR files');
+}

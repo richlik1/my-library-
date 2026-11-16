@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { buildImportReport, type ReportFlag } from '../../core/importers/report';
 import { build, changed, mergeWithNext, move, organize, paragraphStarts, rename, setRemoved, splitAt, textOf, type OrganizedChapter } from '../../core/organizer';
-import { getBook, getContent, reorganizeBook, updateBook } from '../../core/storage/db';
+import { getBook, getContent, getFile, reorganizeBook, replaceBookContent, updateBook } from '../../core/storage/db';
+import { importFile } from '../../core/importers';
 import type { Book, Chapter } from '../../core/types';
 import { usePlaybackSession } from '../hooks/playbackSession';
 import { useToast } from '../hooks/toast';
@@ -45,6 +46,7 @@ export function ImportReview({ id }: { id: string }) {
   const [renaming, setRenaming] = useState<{ index: number; title: string } | null>(null);
   const [splitting, setSplitting] = useState<{ index: number; title: string } | null>(null);
   const [saving, setSaving] = useState(false);
+  const [ocr, setOcr] = useState<string | null>(null);
 
   useEffect(() => {
     void Promise.all([getBook(id), getContent(id)]).then(([b, c]) => {
@@ -87,6 +89,34 @@ export function ImportReview({ id }: { id: string }) {
     }
   };
 
+  /** Reads the scanned pages with OCR (on the device) by importing the stored original again, then updates the book. */
+  const readScanned = async () => {
+    const original = await getFile(id);
+    if (!original) {
+      toast('The original file wasn’t kept (it was too large). Import it again to read its scanned pages.', { kind: 'error' });
+      return;
+    }
+    setOcr('Starting OCR…');
+    try {
+      const file = new File([original.data], original.name, { type: original.type });
+      const imported = await importFile(file, (_f, label) => setOcr(label), { ocr: true });
+      const next = await replaceBookContent(id, imported);
+      const content = await getContent(id);
+      if (next && content) {
+        setBook(next);
+        setOriginal(content.chapters);
+        setList(organize(content.chapters));
+        if (pb.session?.book.id === id) pb.replaceChapters(id, content.chapters);
+      }
+      const read = imported.signals?.ocrPages?.length ?? 0;
+      toast(read ? `Read ${read} scanned page${read > 1 ? 's' : ''} with OCR.` : 'No text could be recognised on the scanned pages.');
+    } catch (e) {
+      toast(`OCR didn’t work: ${(e as Error).message}`, { kind: 'error' });
+    } finally {
+      setOcr(null);
+    }
+  };
+
   const conf = CONFIDENCE[report.confidence];
   return (
     <div className="page tab-page import-review">
@@ -114,6 +144,16 @@ export function ImportReview({ id }: { id: string }) {
           <strong>{ORDER_LABEL[report.order.status]}.</strong> {report.order.explanation}
         </p>
         <FlagList flags={report.flags} />
+        {book.format === 'pdf' && !!book.ocr?.imageOnlyPages.length && (
+          <div style={{ margin: '12px 0' }}>
+            <button className="btn btn-primary" style={{ width: '100%' }} onClick={readScanned} disabled={!!ocr}>
+              {ocr ?? `Read ${book.ocr.imageOnlyPages.length} scanned page${book.ocr.imageOnlyPages.length > 1 ? 's' : ''} with OCR`}
+            </button>
+            <p className="small muted" style={{ margin: '6px 0 0' }} role="status">
+              On this device, nothing is uploaded. The first time, the OCR engine downloads once (about 7 MB). Takes a few seconds per page.
+            </p>
+          </div>
+        )}
         <p className="small muted" style={{ marginBottom: 0 }}>
           Open each chapter to see how it starts and ends. Nothing is invented: text that couldn’t be read is reported here, not filled in.
           Changes are saved only when you tap Save, and the original file is never changed.

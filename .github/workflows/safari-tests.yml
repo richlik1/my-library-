@@ -15,7 +15,8 @@ permissions:
 
 jobs:
   chromium:
-    runs-on: ubuntu-latest
+    # Pinned: Playwright 1.56 can't install its browser on Ubuntu 26.04 (the new ubuntu-latest).
+    runs-on: ubuntu-24.04
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
@@ -26,14 +27,13 @@ jobs:
       - run: npm ci
       - run: npx tsc -b
       - run: npm test
-      - name: Import accuracy on real public-domain books (Project Gutenberg EPUB vs plain text)
+      - name: Import accuracy on real public-domain books (Standard Ebooks sources)
         run: |
-          mkdir -p books
-          for id in 11 1342 84 2701 17489; do
-            curl -sSfL -o books/$id.epub https://www.gutenberg.org/ebooks/$id.epub3.images || curl -sSfL -o books/$id.epub https://www.gutenberg.org/ebooks/$id.epub.noimages || true
-            curl -sSfL -o books/$id.txt https://www.gutenberg.org/cache/epub/$id/pg$id.txt || rm -f books/$id.epub
+          mkdir -p books && cd books
+          for b in lewis-carroll_alices-adventures-in-wonderland jane-austen_pride-and-prejudice mary-shelley_frankenstein herman-melville_moby-dick; do
+            curl -sSfL -o $b.zip https://codeload.github.com/standardebooks/$b/zip/refs/heads/master && unzip -q $b.zip && mv $b-master $b || echo "skip $b"
           done
-          ls -la books
+          cd .. && ls books
           REAL_BOOKS_DIR=$PWD/books npx vitest run tests/real-books.test.ts --reporter=verbose --silent=false
       - run: npx playwright install --with-deps chromium
       - run: npx playwright test --project=desktop --project=iphone-size --reporter=list

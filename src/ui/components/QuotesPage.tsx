@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { XP_RULES, localDate, xpIds } from '../../core/habits';
 import { awardXp, getContent, listAllAnnotations, listBooks, saveAnnotation } from '../../core/storage/db';
-import type { Annotation, Book } from '../../core/types';
+import type { Annotation, Book, Chapter } from '../../core/types';
+import { placeLabel } from '../../core/types';
 import { habitsChanged } from '../hooks/useHabits';
 import { useToast } from '../hooks/toast';
 import { goBack, navigate } from '../hooks/useRoute';
@@ -44,13 +45,14 @@ export function QuotesPage() {
   const refresh = async () => {
     const [annotations, books] = await Promise.all([listAllAnnotations(), listBooks()]);
     const byId = new Map(books.map((b) => [b.id, b]));
-    const titles = new Map<string, string[]>();
+    const chaptersOf = new Map<string, Chapter[]>();
     const out: Quote[] = [];
     for (const a of annotations.filter((x) => x.kind !== 'bookmark').sort((x, y) => y.createdAt - x.createdAt)) {
       const book = byId.get(a.bookId);
       if (!book) continue;
-      if (!titles.has(book.id)) titles.set(book.id, ((await getContent(book.id))?.chapters ?? []).map((c) => c.title));
-      out.push({ a, book, chapterTitle: titles.get(book.id)?.[a.chapter] ?? `Chapter ${a.chapter + 1}` });
+      if (!chaptersOf.has(book.id)) chaptersOf.set(book.id, (await getContent(book.id))?.chapters ?? []);
+      // Chapter, plus the source page for PDFs (“Chapter 3 · p. 47”).
+      out.push({ a, book, chapterTitle: placeLabel(chaptersOf.get(book.id)?.[a.chapter], a.chapter, a.start) });
     }
     setQuotes(out);
   };

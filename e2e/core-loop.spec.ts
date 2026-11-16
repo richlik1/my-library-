@@ -95,6 +95,8 @@ test('core loop: import → clean text → natural voice → highlight → save 
   const card = page.getByRole('article', { name: 'Quote from Field Guide' });
   await expect(card).toContainText('Bring water and a map for the hills.');
   await expect(card).toContainText('Field Guide, A. Ranger · Chapter 1');
+  // The source page of the PDF is kept with the lesson.
+  await expect(card).toContainText('Chapter 1 · p. 1');
   await expect(card).toContainText('lesson');
   await context.setOffline(false);
 });

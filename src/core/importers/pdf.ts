@@ -11,7 +11,7 @@ interface TextItem {
   height: number;
   hasEOL?: boolean;
 }
-interface PdfPage {
+export interface PdfPage {
   getTextContent(): Promise<{ items: Array<TextItem | { type: string }> }>;
   getOperatorList(): Promise<{ fnArray: number[] }>;
   getViewport(o: { scale: number }): { width: number; height: number };
@@ -230,6 +230,22 @@ export function separateFootnotes(pages: Line[][]): { pages: Line[][]; notes: st
   return { pages: out, notes };
 }
 
+/** OCR output (lines, blank lines between paragraphs) as clean paragraphs, with broken words rejoined. */
+export function ocrToText(raw: string): string {
+  return raw
+    .replace(/\r/g, '')
+    .split(/\n\s*\n/)
+    .map((para) =>
+      para
+        .split('\n')
+        .map((l) => l.trim())
+        .filter(Boolean)
+        .reduce((acc, l) => (!acc ? l : /[A-Za-z]-$/.test(acc) && /^[a-z]/.test(l) ? acc.slice(0, -1) + l : `${acc} ${l}`), ''),
+    )
+    .filter(Boolean)
+    .join('\n\n');
+}
+
 /** Turns the lines of one page into paragraphs separated by "\n\n". */
 export function linesToText(lines: Line[]): string {
   if (!lines.length) return '';
@@ -383,7 +399,12 @@ export async function importPdf(
   pdfjs: PdfjsLike,
   data: ArrayBuffer,
   fileName: string,
-  opts: { onProgress?: ProgressFn; docOptions?: Record<string, unknown> } = {},
+  opts: {
+    onProgress?: ProgressFn;
+    docOptions?: Record<string, unknown>;
+    /** Reads a scanned page with OCR (on the device); returns its text, or null when nothing was recognised. */
+    ocrPage?: (page: PdfPage, pageNumber: number) => Promise<string | null>;
+  } = {},
 ): Promise<ImportedBook> {
   const { onProgress } = opts;
   let doc: PdfDoc;
@@ -412,6 +433,7 @@ export async function importPdf(
     const pageLines: Line[][] = [];
     const imageOnlyPages: number[] = [];
     const blankPages: number[] = [];
+    const ocrTexts = new Map<number, string>();
     let cover: string | null = null;
 
     for (let n = 1; n <= doc.numPages; n++) {
@@ -424,8 +446,11 @@ export async function importPdf(
       if (chars < 20) {
         try {
           const ops = await page.getOperatorList();
-          if (ops.fnArray.some((f) => imageOps.has(f))) imageOnlyPages.push(n);
-          else if (chars === 0) blankPages.push(n);
+          if (ops.fnArray.some((f) => imageOps.has(f))) {
+            const text = opts.ocrPage ? await opts.ocrPage(page, n).catch(() => null) : null;
+            if (text && text.replace(/\s/g, '').length >= 20) ocrTexts.set(n, ocrToText(text));
+            else imageOnlyPages.push(n);
+          } else if (chars === 0) blankPages.push(n);
         } catch {
           /* ignore */
         }
@@ -438,8 +463,10 @@ export async function importPdf(
     const printed = printedPageNumbers(pageLines);
     const { pages: bodyLines, notes: footnotes } = separateFootnotes(stripHeadersFooters(pageLines));
     const pageTexts = bodyLines.map(linesToText);
+    // Scanned pages read with OCR take their place in the page order.
+    for (const [n, text] of ocrTexts) pageTexts[n - 1] = text;
     const totalChars = pageTexts.reduce((s, t) => s + t.replace(/\s/g, '').length, 0);
-    if (totalChars < 50) {
+    if (totalChars < 50 && !ocrTexts.size) {
       if (imageOnlyPages.length > 0) throw new ImportError(OCR_EXPLANATION, 'needs-ocr');
       throw new ImportError('No readable text was found in this PDF. ' + OCR_EXPLANATION, 'needs-ocr');
     }
@@ -465,7 +492,7 @@ export async function importPdf(
 
     const ocr: OcrReport | undefined = imageOnlyPages.length ? { totalPages: doc.numPages, imageOnlyPages } : undefined;
     if (footnotes.length) chapters.push({ title: 'Notes', text: footnotes.join('\n\n'), kind: 'notes' });
-    const signals: ImportSignals = { structure, pages: doc.numPages, ...(blankPages.length ? { blankPages } : {}), ...(printed.length ? { printedPageNumbers: printed } : {}), ...(outOfOrder.length ? { tocOutOfOrder: outOfOrder } : {}) };
+    const signals: ImportSignals = { structure, pages: doc.numPages, ...(blankPages.length ? { blankPages } : {}), ...(printed.length ? { printedPageNumbers: printed } : {}), ...(outOfOrder.length ? { tocOutOfOrder: outOfOrder } : {}), ...(ocrTexts.size ? { ocrPages: [...ocrTexts.keys()].sort((a, b) => a - b) } : {}) };
     return { title, author, format: 'pdf', cover, chapters: mapPages(finalizeChapters(chapters), pageTexts), ocr, signals };
   } finally {
     task.destroy().catch(() => undefined);

@@ -107,6 +107,24 @@ describe('PDF importer', () => {
     expect(book.chapters[0].text).toContain('This page has real selectable text on it.');
   });
 
+  it('reads scanned pages with OCR when asked, in their place in the page order', async () => {
+    const pdf = await scannedPdf(true);
+    const book = await importPdf(lib, pdf, 'mixed.pdf', {
+      docOptions: { standardFontDataUrl: require.resolve('pdfjs-dist/package.json').replace('package.json', 'standard_fonts/') },
+      // Stand-in for the OCR engine: the real one runs in the browser (see e2e/ocr.spec.ts).
+      ocrPage: async (_page, n) => `Recognised text of scanned page ${n}, which was a photo of a printed page.\n\nSecond para-\ngraph of page ${n}.`,
+    });
+    expect(book.ocr).toBeUndefined();
+    expect(book.signals?.ocrPages).toEqual([1, 2, 3]);
+    const text = book.chapters.map((c) => c.text).join('\n\n');
+    const order = [1, 2, 3].map((n) => text.indexOf(`scanned page ${n},`));
+    expect(order.every((v, i) => v >= 0 && (i === 0 || v > order[i - 1]))).toBe(true);
+    expect(text.indexOf('This page has real selectable text on it.')).toBeGreaterThan(order[2]);
+    expect(text).toContain('Second paragraph of page 2.');
+    const { buildImportReport } = await import('../src/core/importers/report');
+    expect(buildImportReport(book).flags.map((f) => f.message).join()).toContain('Pages 1–3 were read from scanned images with OCR');
+  });
+
   it('rejects files that are not PDFs', async () => {
     await expect(importPdfNode(new TextEncoder().encode('%PDF-garbage').buffer as ArrayBuffer, 'bad.pdf')).rejects.toMatchObject({ kind: 'corrupt' });
   });

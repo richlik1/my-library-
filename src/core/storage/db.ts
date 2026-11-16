@@ -251,6 +251,49 @@ export async function reorganizeBook(bookId: string, list: OrganizedChapter[]): 
   return { chapters, audioCleared: !sameText };
 }
 
+/**
+ * Replaces a book's text with a new import of the same file (e.g. after reading scanned pages with OCR).
+ * Highlights and notes are moved to where their quoted words are found; the reading position stays in the same
+ * chapter when it still exists. Audio for the old text is deleted.
+ */
+export async function replaceBookContent(bookId: string, imported: ImportedBook): Promise<Book | undefined> {
+  const d = await db();
+  const chapters = imported.chapters;
+  const tx = d.transaction(['contents', 'books', 'annotations', 'progress', 'audio', 'audioData'], 'readwrite');
+  await tx.objectStore('contents').put({ bookId, chapters });
+  const book = await tx.objectStore('books').get(bookId);
+  let next: Book | undefined;
+  if (book) {
+    const { ocr: _old, ...rest } = book;
+    next = {
+      ...rest,
+      chapterCount: chapters.length,
+      charCount: chapters.reduce((n, c) => n + c.text.length, 0),
+      ...(imported.ocr ? { ocr: imported.ocr } : {}),
+      ...(imported.signals ? { signals: imported.signals } : {}),
+    };
+    await tx.objectStore('books').put(next);
+  }
+  for (const a of await tx.objectStore('annotations').index('byBook').getAll(bookId)) {
+    const ch = chapters.findIndex((c) => c.text.includes(a.quote));
+    if (ch >= 0) {
+      const start = chapters[ch].text.indexOf(a.quote);
+      await tx.objectStore('annotations').put({ ...a, chapter: ch, start, end: start + a.quote.length });
+    } else {
+      const chapter = Math.min(a.chapter, chapters.length - 1);
+      await tx.objectStore('annotations').put({ ...a, chapter, start: 0, end: Math.min(chapters[chapter].text.length, Math.max(1, a.end - a.start)) });
+    }
+  }
+  const progress = await tx.objectStore('progress').get(bookId);
+  if (progress && progress.chapter >= chapters.length) await tx.objectStore('progress').put({ ...progress, chapter: chapters.length - 1, offset: 0 });
+  for (const key of await tx.objectStore('audio').index('byBook').getAllKeys(bookId)) {
+    await tx.objectStore('audio').delete(key);
+    await tx.objectStore('audioData').delete(key);
+  }
+  await tx.done;
+  return next;
+}
+
 /** The original file, always returned as a Blob. */
 export async function getFile(bookId: string): Promise<(StoredFile & { data: Blob }) | undefined> {
   const f = await (await db()).get('files', bookId);

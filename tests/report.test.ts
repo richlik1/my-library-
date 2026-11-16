@@ -87,3 +87,17 @@ describe('import quality report', () => {
     expect(r.order.status).toBe('conflicts');
   });
 });
+
+describe('source page of a place in a chapter', () => {
+  it('finds the page a character offset is on', async () => {
+    const { pageAt, placeLabel } = await import('../src/core/types');
+    const ch = { title: 'Chapter 2', text: 'x'.repeat(300), pages: [{ offset: 0, page: 11 }, { offset: 120, page: 12 }, { offset: 250, page: 13 }] };
+    expect(pageAt(ch, 0)).toBe(11);
+    expect(pageAt(ch, 119)).toBe(11);
+    expect(pageAt(ch, 120)).toBe(12);
+    expect(pageAt(ch, 299)).toBe(13);
+    expect(pageAt({ pages: undefined }, 10)).toBeNull();
+    expect(placeLabel(ch, 1, 130)).toBe('Chapter 2 · p. 12');
+    expect(placeLabel({ title: 'Intro' }, 0, 5)).toBe('Intro');
+  });
+});

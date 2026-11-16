@@ -40,6 +40,11 @@ registerRoute(
   ({ url }) => url.origin === self.location.origin && url.pathname.includes('/ort/'),
   new CacheFirst({ cacheName: 'voice-runtime', plugins: [new ExpirationPlugin({ maxEntries: 8 }), isolate] }),
 );
+// OCR engine and language data: fetched the first time scanned pages are read, then kept for offline use.
+registerRoute(
+  ({ url }) => url.origin === self.location.origin && url.pathname.includes('/ocr/'),
+  new CacheFirst({ cacheName: 'ocr-runtime', plugins: [new ExpirationPlugin({ maxEntries: 12 }), isolate] }),
+);
 
 self.addEventListener('message', (e) => {
   if (e.data?.type === 'SKIP_WAITING') void self.skipWaiting();

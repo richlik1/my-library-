@@ -196,6 +196,13 @@ export function buildImportReport(book: { chapters: Chapter[]; ocr?: OcrReport; 
       message: `Page${book.ocr.imageOnlyPages.length > 1 ? 's' : ''} ${rangeText(book.ocr.imageOnlyPages)} ${book.ocr.imageOnlyPages.length > 1 ? 'are' : 'is'} scanned images: their text is not included (it needs OCR).`,
     });
 
+  if (signals?.ocrPages?.length)
+    flag({
+      kind: 'ocr',
+      severity: 'info',
+      message: `Page${signals.ocrPages.length > 1 ? 's' : ''} ${rangeText(signals.ocrPages)} ${signals.ocrPages.length > 1 ? 'were' : 'was'} read from scanned images with OCR on this device. OCR can misread words: check those pages if something sounds wrong.`,
+    });
+
   // 5. Damaged text and very short chapters.
   book.chapters.forEach((c, i) => {
     const g = garbleScore(c.text);

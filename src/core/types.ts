@@ -27,6 +27,8 @@ export interface ImportSignals {
   tocOutOfOrder?: string[];
   /** EPUB: table-of-contents entries that point to nothing in the book. */
   tocMissing?: string[];
+  /** PDF: scanned pages whose text was read with OCR on the device. */
+  ocrPages?: number[];
   /** Sections not in the reading order (EPUB `linear="no"`) that were added at the end. */
   extras?: string[];
 }
@@ -221,4 +223,22 @@ export interface ImportedBook {
   /** BCP 47 language, when the file says (e.g. "en", "fr"). */
   language?: string;
   signals?: ImportSignals;
+}
+
+/** The source page (PDF) where a place in a chapter is, or null when the chapter has no page information. */
+export function pageAt(chapter: Pick<Chapter, 'pages'> | undefined, offset: number): number | null {
+  const pages = chapter?.pages;
+  if (!pages?.length) return null;
+  let page = pages[0].page;
+  for (const p of pages) {
+    if (p.offset > offset) break;
+    page = p.page;
+  }
+  return page;
+}
+
+/** “Chapter 3 · p. 47” (page only for books that have page information). */
+export function placeLabel(chapter: Pick<Chapter, 'title' | 'pages'> | undefined, index: number, offset: number): string {
+  const page = pageAt(chapter, offset);
+  return `${chapter?.title ?? `Chapter ${index + 1}`}${page ? ` · p. ${page}` : ''}`;
 }
